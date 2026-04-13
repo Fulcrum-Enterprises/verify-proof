@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "verify-proof"
+version = "0.1.0"
+description = "Verify blockchain-anchored timestamp proofs (ProofAnchor, ProofLedger, OpenTimestamps)"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    {name = "Craig Solomon", email = "craig@proofanchor.com"},
+]
+keywords = [
+    "blockchain", "timestamp", "verification", "proof-of-existence",
+    "sha256", "bitcoin", "polygon", "evidence", "copyright",
+    "chain-of-custody", "digital-forensics", "proofanchor", "proofledger",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Legal Industry",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security :: Cryptography",
+    "Topic :: Utilities",
+]
+
+[project.scripts]
+verify-proof = "verify_proof:main"
+
+[project.urls]
+Homepage = "https://github.com/Fulcrum-Enterprises/verify-proof"
+ProofAnchor = "https://proofanchor.com"
+ProofLedger = "https://proofledger.com"
