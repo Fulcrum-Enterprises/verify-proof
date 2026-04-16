@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=68.0"]
-build-backend = "setuptools.backends._legacy:_Backend"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "verify-proof"
@@ -10,7 +10,7 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
 authors = [
-    {name = "Craig Solomon", email = "craig@proofanchor.com"},
+    {name = "Craig Solomon", email = "craig@fulcrumenterprises.tech"},
 ]
 keywords = [
     "blockchain", "timestamp", "verification", "proof-of-existence",
@@ -21,7 +21,6 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: Legal Industry",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Topic :: Security :: Cryptography",
     "Topic :: Utilities",
