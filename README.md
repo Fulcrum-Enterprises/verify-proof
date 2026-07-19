@@ -2,7 +2,7 @@
 
 A free, open-source CLI tool for verifying blockchain-anchored timestamp proofs.
 
-Verify that a file's SHA-256 hash matches a blockchain-anchored proof record, confirming the file existed at a specific point in time. Works with proof files from [ProofAnchor](https://proofanchor.com), [ProofLedger](https://proofledger.com), and other blockchain timestamp services.
+Verify that a file's SHA-256 hash matches a blockchain-anchored proof record, confirming the file existed at a specific point in time. Works with proof files from [ProofLedger](https://proofledger.io) and other blockchain timestamp services.
 
 ## What is blockchain timestamp verification?
 
@@ -23,7 +23,24 @@ This technique is used for:
 ## Installation
 
 ```bash
-# No dependencies required — uses only Python standard library
+pip install verify-proof
+```
+
+That's it. The base install pulls **no dependencies** — it uses only the Python standard library — and gives you a `verify-proof` command:
+
+```bash
+verify-proof --help
+```
+
+To use it as an MCP server for Claude Desktop or Cursor, install the optional extra instead ([details below](#use-as-an-mcp-server-ai-assistants)):
+
+```bash
+pip install "verify-proof[mcp]"
+```
+
+Prefer to run from source? Clone it — the CLI works the same:
+
+```bash
 git clone https://github.com/Fulcrum-Enterprises/verify-proof.git
 cd verify-proof
 python verify_proof.py --help
@@ -34,7 +51,7 @@ python verify_proof.py --help
 ### Compute a file's SHA-256 hash
 
 ```bash
-python verify_proof.py hash document.pdf
+verify-proof hash document.pdf
 # SHA256: a1b2c3d4e5f6...
 # File: document.pdf
 ```
@@ -42,7 +59,7 @@ python verify_proof.py hash document.pdf
 ### Verify a file against a blockchain proof
 
 ```bash
-python verify_proof.py verify document.pdf --proof proof.json
+verify-proof verify document.pdf --proof proof.json
 # VERIFIED: File hash matches blockchain anchor on bitcoin.
 # Transaction: abc123... Anchored at: 2026-03-15T10:30:00Z
 ```
@@ -58,13 +75,58 @@ The proof JSON file contains the blockchain anchor record:
   "blockchain": "bitcoin",
   "tx_id": "abc123...",
   "anchored_at": "2026-03-15T10:30:00Z",
-  "service": "proofanchor",
+  "service": "proofledger",
   "merkle_path": [
     {"hash": "def456...", "position": "right"},
     {"hash": "789abc...", "position": "left"}
   ]
 }
 ```
+
+## Use as an MCP server (AI assistants)
+
+`verify-proof` ships an optional [Model Context Protocol](https://modelcontextprotocol.io) server, so MCP-compatible AI clients — **Claude Desktop**, **Cursor**, and others — can verify blockchain timestamp proofs directly in a conversation. The file never leaves your machine: hashing and verification run locally, and only the resulting hash is ever compared against the proof.
+
+### Install with the MCP extra
+
+```bash
+pip install "verify-proof[mcp]"
+```
+
+The base install stays dependency-free; the `[mcp]` extra adds the MCP SDK and installs a `verify-proof-mcp` command (a stdio server).
+
+### Tools exposed
+
+| Tool | What it does |
+|------|--------------|
+| `compute_file_hash` | Compute the SHA-256 (or other) hash of a local file |
+| `verify_file` | Verify a local file against a proof JSON file |
+| `verify_hash` | Verify a known hash against inline or file-based proof data |
+| `explain_proof` | Describe, in plain language, what a proof asserts and how to check it on a block explorer |
+
+### Connect it to Claude Desktop
+
+Add this to your `claude_desktop_config.json` (see [`examples/claude_desktop_config.json`](examples/claude_desktop_config.json)):
+
+```json
+{
+  "mcpServers": {
+    "verify-proof": {
+      "command": "verify-proof-mcp"
+    }
+  }
+}
+```
+
+Restart Claude Desktop. If `verify-proof-mcp` isn't found on your PATH, use the Python module form instead: `"command": "python"`, `"args": ["-m", "verify_proof_mcp"]`.
+
+Then ask the assistant things like:
+
+- *"Verify `~/contract.pdf` against `~/contract-proof.json`."*
+- *"What does this proof file actually prove?"*
+- *"Compute the SHA-256 of this file so I can anchor it."*
+
+> Proofs are produced by services like [ProofLedger](https://proofledger.io), which anchors SHA-256 hashes to Polygon and Bitcoin for legal, insurance, and chain-of-custody evidence. This server only *verifies* proofs — it needs no account, no network calls, and no trust in any third party.
 
 ## How it works
 
@@ -78,9 +140,7 @@ The proof JSON file contains the blockchain anchor record:
 
 This tool verifies proofs created by:
 
-- **[ProofAnchor](https://proofanchor.com)** — Blockchain timestamp service for digital creators. Anchors SHA-256 hashes to Bitcoin and Polygon, providing proof of creation for art, writing, music, designs, and other creative work. Used by creators to prove authorship before DMCA disputes.
-
-- **[ProofLedger](https://proofledger.com)** — Enterprise evidence preservation platform. Creates tamper-proof, blockchain-anchored timestamps for pre-loss documentation, legal evidence, insurance claims, and chain of custody records. Used by insurance carriers, forensic consultants, and attorneys.
+- **[ProofLedger](https://proofledger.io)** — Evidence preservation platform. Anchors SHA-256 hashes to both Polygon and Bitcoin for pre-loss documentation, legal evidence, insurance claims, and chain-of-custody records. Built for insurance, legal, and forensic workflows.
 
 - Any service producing SHA-256 hash proofs with blockchain transaction references.
 
@@ -99,7 +159,6 @@ MIT License. Free to use, modify, and distribute.
 
 ## About
 
-Built by [Fulcrum Enterprises LLC](https://proofanchor.com) — building tools for blockchain-verified proof of existence.
+Built by [Fulcrum Enterprises LLC](https://fulcrumenterprises.tech) — building tools for blockchain-verified proof of existence.
 
-- ProofAnchor: Proof of creation for digital creators
 - ProofLedger: Tamper-proof evidence for legal and insurance
