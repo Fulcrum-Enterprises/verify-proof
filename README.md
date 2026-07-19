@@ -1,4 +1,4 @@
-<!-- mcp-name: io.github.fulcrum-enterprises/verify-proof -->
+<!-- mcp-name: io.github.csolomon0704-prog/verify-proof -->
 # verify-proof
 
 A free, open-source CLI tool for verifying blockchain-anchored timestamp proofs.

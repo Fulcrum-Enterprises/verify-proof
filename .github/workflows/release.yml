@@ -58,7 +58,7 @@ jobs:
           z = zipfile.ZipFile(whl)
           meta = next(n for n in z.namelist() if n.endswith("METADATA"))
           text = z.read(meta).decode("utf-8")
-          marker = "mcp-name: io.github.fulcrum-enterprises/verify-proof"
+          marker = "mcp-name: io.github.csolomon0704-prog/verify-proof"
           if marker not in text:
               sys.exit(f"::error::{marker!r} missing from {whl} METADATA")
           print("ownership marker present")
