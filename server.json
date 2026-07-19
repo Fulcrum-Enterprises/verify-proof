@@ -1,0 +1,24 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.fulcrum-enterprises/verify-proof",
+  "title": "verify-proof",
+  "description": "Verify blockchain-anchored timestamp proofs offline. Recomputes a file's SHA-256, validates the Merkle path to an on-chain root, and explains what a proof asserts. No network calls, account, or API key.",
+  "repository": {
+    "url": "https://github.com/Fulcrum-Enterprises/verify-proof",
+    "source": "github",
+    "id": "R_kgDOSA-RCg"
+  },
+  "version": "0.2.1",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "verify-proof",
+      "version": "0.2.1",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "verify-proof"
-version = "0.1.0"
-description = "Verify blockchain-anchored timestamp proofs (ProofAnchor, ProofLedger, OpenTimestamps)"
+version = "0.2.1"
+description = "Verify blockchain-anchored timestamp proofs (ProofLedger, OpenTimestamps) — CLI + MCP server"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
@@ -15,7 +15,7 @@ authors = [
 keywords = [
     "blockchain", "timestamp", "verification", "proof-of-existence",
     "sha256", "bitcoin", "polygon", "evidence", "copyright",
-    "chain-of-custody", "digital-forensics", "proofanchor", "proofledger",
+    "chain-of-custody", "digital-forensics", "proofledger",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -26,10 +26,18 @@ classifiers = [
     "Topic :: Utilities",
 ]
 
+# Base install is dependency-free (Python standard library only).
+# The MCP server is an optional extra: pip install "verify-proof[mcp]"
+[project.optional-dependencies]
+mcp = ["mcp>=1.2.0"]
+
 [project.scripts]
 verify-proof = "verify_proof:main"
+verify-proof-mcp = "verify_proof_mcp:main"
 
 [project.urls]
 Homepage = "https://github.com/Fulcrum-Enterprises/verify-proof"
-ProofAnchor = "https://proofanchor.com"
-ProofLedger = "https://proofledger.com"
+ProofLedger = "https://proofledger.io"
+
+[tool.setuptools]
+py-modules = ["verify_proof", "verify_proof_mcp"]
