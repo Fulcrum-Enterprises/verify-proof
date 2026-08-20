@@ -21,6 +21,8 @@ This technique is used for:
 - **Copyright protection** — Establish authorship dates for DMCA disputes and IP claims
 - **Regulatory compliance** — Meet evidence preservation requirements with independently verifiable records
 
+> Also available for Node.js: `npm install verify-proof` — a zero-dependency port sharing the same proof format and semantics, tested against the same fixtures. See [`js/`](js/).
+
 ## Installation
 
 ```bash

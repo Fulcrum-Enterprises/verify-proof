@@ -1,0 +1,45 @@
+{
+  "name": "verify-proof",
+  "version": "0.2.3",
+  "description": "Verify blockchain-anchored timestamp proofs offline (ProofLedger, OpenTimestamps-compatible). Zero dependencies. CLI + library.",
+  "type": "module",
+  "main": "verify-proof.js",
+  "exports": "./verify-proof.js",
+  "bin": {
+    "verify-proof": "verify-proof.js"
+  },
+  "files": [
+    "verify-proof.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node test.js"
+  },
+  "keywords": [
+    "blockchain",
+    "timestamp",
+    "verification",
+    "proof-of-existence",
+    "sha256",
+    "merkle",
+    "bitcoin",
+    "polygon",
+    "evidence",
+    "chain-of-custody",
+    "digital-forensics",
+    "proofledger",
+    "opentimestamps"
+  ],
+  "author": "Craig Solomon <craig@fulcrumenterprises.tech>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Fulcrum-Enterprises/verify-proof.git",
+    "directory": "js"
+  },
+  "homepage": "https://github.com/Fulcrum-Enterprises/verify-proof#readme",
+  "bugs": "https://github.com/Fulcrum-Enterprises/verify-proof/issues"
+}
