@@ -3,18 +3,19 @@
   "name": "io.github.csolomon0704-prog/verify-proof",
   "title": "verify-proof",
   "description": "Verify blockchain-anchored timestamp proofs offline. No network calls, account, or API key.",
+  "websiteUrl": "https://proofledger.io",
   "repository": {
     "url": "https://github.com/Fulcrum-Enterprises/verify-proof",
     "source": "github",
     "id": "R_kgDOSA-RCg"
   },
-  "version": "0.2.2",
+  "version": "0.2.3",
   "packages": [
     {
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "verify-proof",
-      "version": "0.2.2",
+      "version": "0.2.3",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"

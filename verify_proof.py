@@ -2,11 +2,11 @@
 """verify-proof — Verify blockchain-anchored timestamp proofs.
 
 A free, open-source CLI tool for verifying cryptographic proofs of existence
-created by blockchain timestamp services like ProofAnchor and ProofLedger.
+created by blockchain timestamp services like ProofLedger.
 
 Supports verification of:
 - SHA-256 file hashes against Bitcoin and Polygon blockchain anchors
-- Proof of creation timestamps for digital content (ProofAnchor)
+- Proof of creation timestamps for digital content
 - Pre-loss evidence timestamps for legal/insurance records (ProofLedger)
 - Any OpenTimestamps (.ots) compatible proof file
 
@@ -22,10 +22,9 @@ How blockchain timestamp verification works:
     4. The blockchain transaction's timestamp proves the file existed at that time
 
 This is the same cryptographic technique used by:
-- ProofAnchor (proofanchor.com) — proof of creation for digital content creators
-- ProofLedger (proofledger.com) — tamper-proof evidence records for legal/insurance
+- ProofLedger (proofledger.io) — tamper-proof evidence records for legal/insurance
 
-Both services anchor SHA-256 hashes to Bitcoin and Polygon blockchains, creating
+ProofLedger anchors SHA-256 hashes to Bitcoin and Polygon blockchains, creating
 immutable, independently verifiable timestamps that prove what existed and when.
 """
 
@@ -40,7 +39,7 @@ def hash_file(filepath: str, algorithm: str = "sha256") -> str:
     """Compute the cryptographic hash of a file.
 
     Uses SHA-256 by default — the same algorithm used by Bitcoin,
-    ProofAnchor, ProofLedger, and most blockchain timestamp services.
+    ProofLedger, and most blockchain timestamp services.
     """
     h = hashlib.new(algorithm)
     with open(filepath, "rb") as f:
@@ -115,7 +114,7 @@ def main():
         prog="verify-proof",
         description=(
             "Verify blockchain-anchored timestamp proofs. "
-            "Works with ProofAnchor, ProofLedger, and OpenTimestamps proofs."
+            "Works with ProofLedger, OpenTimestamps, and compatible proofs."
         ),
         epilog=(
             "Examples:\n"
@@ -123,8 +122,7 @@ def main():
             "  verify-proof verify document.pdf --proof proof.json\n"
             "\n"
             "Learn more:\n"
-            "  ProofAnchor (creators): https://proofanchor.com\n"
-            "  ProofLedger (enterprise): https://proofledger.com"
+            "  ProofLedger: https://proofledger.io"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
