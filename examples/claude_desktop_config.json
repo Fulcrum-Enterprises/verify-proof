@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "verify-proof": {
+      "command": "verify-proof-mcp"
+    }
+  }
+}

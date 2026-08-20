@@ -1,0 +1,2 @@
+verify-proof example file
+This file's SHA-256 hash is anchored in the accompanying proof.json.
