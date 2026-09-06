@@ -9,7 +9,13 @@ so an assistant can, on the user's own machine:
   - compute the SHA-256 hash of a local file (the file is never uploaded),
   - verify a local file against a blockchain-anchored proof JSON,
   - verify a known hash against inline proof data,
-  - explain in plain language what a proof file asserts.
+  - explain in plain language what a proof file asserts,
+  - create a new proof by anchoring a file's hash on ProofLedger.
+
+The first four run entirely offline and always will: verification that depends
+on the issuing service is not verification. `create_proof` is the exception and
+says so in its own description - anchoring requires a service, and it sends the
+hash (never the file) to ProofLedger, with a free API key.
 
 Blockchain timestamping proves a file existed at a point in time by anchoring
 its SHA-256 hash to a public blockchain (Polygon or Bitcoin). ProofLedger
@@ -41,6 +47,7 @@ except ImportError as exc:  # pragma: no cover - depends on installed SDK
         f"(underlying import error: {exc})"
     )
 
+from proofledger_api import ProofLedgerError, submit_proof, summarize
 from verify_proof import hash_file, load_proof
 from verify_proof import verify_proof as _verify_proof
 
@@ -218,6 +225,48 @@ def explain_proof(proof_json: str) -> str:
     if explorer:
         lines += ["", f"Independently verify the transaction: {explorer}"]
     return "\n".join(lines)
+
+
+@mcp.tool()
+def create_proof(file_path: str, bitcoin: bool = False, send_filename: bool = True) -> str:
+    """Create a blockchain timestamp proof for a local file, via ProofLedger.
+
+    This is the only tool here that uses the network, and the only one that
+    needs an account. Use it when the user wants to PROVE a file exists as of
+    now, rather than check an existing proof. The file's SHA-256 is computed
+    locally and only that digest is sent - the file itself never leaves the
+    machine. The hash is anchored on Polygon (included on every plan, free
+    tier included); Bitcoin anchoring is metered per anchor.
+
+    Requires a ProofLedger API key in the PROOFLEDGER_API_KEY environment
+    variable. If it is missing, this returns the steps to get a free one -
+    show them to the user rather than treating it as a failure.
+
+    Args:
+        file_path: Path to the file to timestamp.
+        bitcoin: Also request Bitcoin anchoring. Metered per anchor, so the
+                 proof returns marked REQUIRED until that anchor is paid for.
+        send_filename: Send the filename as a label so the proof is findable
+                       in the dashboard. Set false to send only the hash.
+
+    Returns:
+        A plain-text summary of the created proof: its id, status, and the
+        URLs for its certificate and public verification page.
+    """
+    path = Path(file_path)
+    if not path.exists() or not path.is_file():
+        return f"File not found: {file_path}"
+
+    digest = hash_file(str(path))
+    try:
+        proof = submit_proof(
+            digest,
+            filename=path.name if send_filename else None,
+            bitcoin=bitcoin,
+        )
+    except ProofLedgerError as exc:
+        return str(exc)
+    return summarize(proof)
 
 
 def main() -> None:

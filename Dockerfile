@@ -8,7 +8,7 @@ FROM python:3.12-slim
 WORKDIR /app
 
 COPY pyproject.toml README.md LICENSE ./
-COPY verify_proof.py verify_proof_mcp.py ./
+COPY verify_proof.py verify_proof_mcp.py proofledger_api.py ./
 COPY examples ./examples
 
 RUN pip install --no-cache-dir ".[mcp]"

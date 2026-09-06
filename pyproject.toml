@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "verify-proof"
-version = "0.2.3"
+version = "0.3.0"
 description = "Verify blockchain-anchored timestamp proofs (ProofLedger, OpenTimestamps) — CLI + MCP server"
 readme = "README.md"
 license = "MIT"
@@ -63,4 +63,4 @@ Changelog = "https://github.com/Fulcrum-Enterprises/verify-proof/releases"
 ProofLedger = "https://proofledger.io"
 
 [tool.setuptools]
-py-modules = ["verify_proof", "verify_proof_mcp"]
+py-modules = ["verify_proof", "verify_proof_mcp", "proofledger_api"]

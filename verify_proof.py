@@ -14,6 +14,11 @@ Usage:
     python verify_proof.py <file> [--proof <proof.json>] [--algorithm sha256]
     python verify_proof.py hash <file>
     python verify_proof.py verify <file> --proof <proof.json>
+    python verify_proof.py create <file> [--bitcoin]
+
+`hash` and `verify` never touch the network. `create` is the one exception:
+it submits the hash (never the file) to ProofLedger to be anchored, and needs
+a free API key.
 
 How blockchain timestamp verification works:
     1. A file's SHA-256 hash is computed locally (never uploaded)
@@ -33,6 +38,14 @@ import hashlib
 import json
 import sys
 from pathlib import Path
+
+from proofledger_api import (
+    API_KEY_ENV,
+    DEFAULT_BASE_URL,
+    ProofLedgerError,
+    submit_proof,
+    summarize,
+)
 
 
 def hash_file(filepath: str, algorithm: str = "sha256") -> str:
@@ -120,6 +133,7 @@ def main():
             "Examples:\n"
             "  verify-proof hash document.pdf\n"
             "  verify-proof verify document.pdf --proof proof.json\n"
+            "  verify-proof create document.pdf   (needs a free API key)\n"
             "\n"
             "Learn more:\n"
             "  ProofLedger: https://proofledger.io"
@@ -138,6 +152,36 @@ def main():
     verify_parser.add_argument("file", help="Path to the file to verify")
     verify_parser.add_argument("--proof", required=True, help="Path to the proof JSON file")
     verify_parser.add_argument("--algorithm", default="sha256", help="Hash algorithm (default: sha256)")
+
+    # create subcommand — the only subcommand that uses the network
+    create_parser = subparsers.add_parser(
+        "create",
+        help="Anchor a file's hash on ProofLedger (sends the hash, never the file)",
+    )
+    create_parser.add_argument("file", help="Path to the file to timestamp")
+    create_parser.add_argument(
+        "--bitcoin",
+        action="store_true",
+        help="Also request Bitcoin anchoring (metered per anchor on every tier)",
+    )
+    create_parser.add_argument(
+        "--label",
+        help="Name to store with the proof (default: the filename)",
+    )
+    create_parser.add_argument(
+        "--no-filename",
+        action="store_true",
+        help="Send only the hash — no filename leaves this machine",
+    )
+    create_parser.add_argument(
+        "--api-key",
+        help=f"ProofLedger API key (default: ${API_KEY_ENV})",
+    )
+    create_parser.add_argument(
+        "--base-url",
+        default=DEFAULT_BASE_URL,
+        help=f"API base URL (default: {DEFAULT_BASE_URL})",
+    )
 
     args = parser.parse_args()
 
@@ -171,6 +215,26 @@ def main():
         else:
             print(f"FAILED: {result.get('error', 'Unknown error')}")
             sys.exit(1)
+
+    elif args.command == "create":
+        if not Path(args.file).exists():
+            print(f"Error: File not found: {args.file}", file=sys.stderr)
+            sys.exit(1)
+
+        file_hash = hash_file(args.file)
+        label = None if args.no_filename else (args.label or Path(args.file).name)
+        try:
+            proof = submit_proof(
+                file_hash,
+                filename=label,
+                bitcoin=args.bitcoin,
+                key=args.api_key,
+                base_url=args.base_url,
+            )
+        except ProofLedgerError as exc:
+            print(str(exc), file=sys.stderr)
+            sys.exit(1)
+        print(summarize(proof, base_url=args.base_url))
 
 
 if __name__ == "__main__":

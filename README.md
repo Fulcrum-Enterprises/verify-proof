@@ -67,6 +67,24 @@ verify-proof verify document.pdf --proof proof.json
 # Transaction: abc123... Anchored at: 2026-03-15T10:30:00Z
 ```
 
+### Create a proof (needs a free API key)
+
+Everything above works offline. This is the one command that does not: to prove
+a file exists *now*, some service has to anchor it, and this submits the hash to
+ProofLedger for that.
+
+```bash
+export PROOFLEDGER_API_KEY=sk_...      # Account > API Keys, free tier included
+verify-proof create document.pdf       # Polygon anchor
+verify-proof create document.pdf --bitcoin
+verify-proof create document.pdf --no-filename   # send only the hash
+```
+
+Only the 64-character SHA-256 digest leaves your machine, plus the filename
+unless you pass `--no-filename`. The file itself is never uploaded, on any
+command. Free accounts include 25 API proofs a month and unlimited Polygon
+anchoring through the web app: [proofledger.io](https://proofledger.io/login.html?utm_source=verify-proof&utm_medium=readme&utm_campaign=create).
+
 ### Proof file format
 
 The proof JSON file contains the blockchain anchor record:
@@ -106,6 +124,7 @@ The base install stays dependency-free; the `[mcp]` extra adds the MCP SDK and i
 | `verify_file` | Verify a local file against a proof JSON file |
 | `verify_hash` | Verify a known hash against inline or file-based proof data |
 | `explain_proof` | Describe, in plain language, what a proof asserts and how to check it on a block explorer |
+| `create_proof` | Anchor a file's hash on ProofLedger to create a new proof. The only tool that uses the network, and the only one needing an API key |
 
 ### Connect it to Claude Desktop
 
