@@ -4,6 +4,8 @@ Verify blockchain-anchored timestamp proofs offline. Zero dependencies — only 
 
 This is the Node.js port of the [`verify-proof` Python package](https://pypi.org/project/verify-proof/). Both share the same JSON proof format and the same verification semantics, tested against the same fixtures, so a proof verified by one is verified by the other.
 
+Verification is at parity and is meant to stay there. Proof *creation* is not: the Python package gained a `create` command in 0.3.0 that anchors a hash through ProofLedger, and this port has no equivalent yet. It verifies; it does not issue.
+
 Works with proofs from [ProofLedger](https://proofledger.io) and compatible blockchain timestamping services.
 
 ## Install
