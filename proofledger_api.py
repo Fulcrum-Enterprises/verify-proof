@@ -31,6 +31,11 @@ API_KEY_ENV = "PROOFLEDGER_API_KEY"
 _UTM = "utm_source=verify-proof&utm_medium=cli"
 SIGNUP_URL = f"{DEFAULT_BASE_URL}/login.html?{_UTM}&utm_campaign=api-key"
 PRICING_URL = f"{DEFAULT_BASE_URL}/pricing.html?{_UTM}&utm_campaign=quota"
+# The one printed after a successful `verify`, which is the command almost every
+# install actually runs. Its own campaign so the scoreboard can tell the people who
+# arrived after verifying somebody else's proof from the ones who went looking for
+# an API key.
+HOME_URL = f"{DEFAULT_BASE_URL}/?{_UTM}&utm_campaign=verified"
 
 
 class ProofLedgerError(RuntimeError):

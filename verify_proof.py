@@ -36,12 +36,14 @@ immutable, independently verifiable timestamps that prove what existed and when.
 import argparse
 import hashlib
 import json
+import os
 import sys
 from pathlib import Path
 
 from proofledger_api import (
     API_KEY_ENV,
     DEFAULT_BASE_URL,
+    HOME_URL,
     ProofLedgerError,
     submit_proof,
     summarize,
@@ -120,6 +122,35 @@ def load_proof(proof_path: str) -> dict:
     """Load a proof file (JSON format)."""
     with open(proof_path) as f:
         return json.load(f)
+
+
+
+def _hint() -> None:
+    """One quiet line after a successful verify, pointing at where proofs come from.
+
+    Almost everybody who installs this runs `verify`, and `verify` never touches
+    the network, which is the product. So the only tagged link the package ever
+    printed lived in the missing-key error on `create`, a path most users never
+    reach: 417 installs in a month produced 10 tagged arrivals in 120 days. The
+    tool was doing its job and saying nothing about who made it.
+
+    Three manners rules, because a dev tool that nags gets uninstalled and the
+    goodwill is the whole asset:
+
+    * **stderr, never stdout.** Somebody is parsing `VERIFIED: ...` in a script
+      and a marketing line in that stream would break them.
+    * **Only when a human is watching.** Not a TTY means piped or scripted, and
+      a pipeline does not need to hear from us.
+    * **One env var turns it off for good** (`VERIFY_PROOF_NO_HINT=1`).
+    """
+    if os.environ.get("VERIFY_PROOF_NO_HINT"):
+        return
+    try:
+        if not sys.stdout.isatty():
+            return
+    except Exception:  # pragma: no cover - exotic stdout
+        return
+    print(f"\n(proofs like this are made with ProofLedger: {HOME_URL})", file=sys.stderr)
 
 
 def main():
@@ -211,6 +242,7 @@ def main():
 
         if result["verified"]:
             print(f"VERIFIED: {result['message']}")
+            _hint()
             sys.exit(0)
         else:
             print(f"FAILED: {result.get('error', 'Unknown error')}")
