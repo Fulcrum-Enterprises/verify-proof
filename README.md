@@ -67,6 +67,16 @@ verify-proof verify document.pdf --proof proof.json
 # Transaction: abc123... Anchored at: 2026-03-15T10:30:00Z
 ```
 
+### Quiet by default
+
+A successful `verify` prints one line to stderr saying where proofs like it come
+from. It is suppressed whenever the output is piped or redirected, so scripts
+never see it, and stdout is unchanged either way. To silence it everywhere:
+
+```bash
+export VERIFY_PROOF_NO_HINT=1
+```
+
 ### Create a proof (needs a free API key)
 
 Everything above works offline. This is the one command that does not: to prove
