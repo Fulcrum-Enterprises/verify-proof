@@ -3,3 +3,6 @@ __pycache__/
 build/
 dist/
 *.egg-info/
+
+# Build-time helper binaries — fetched, not authored.
+.tools/
