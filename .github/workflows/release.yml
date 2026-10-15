@@ -9,8 +9,15 @@ name: Release to PyPI
 #   Owner: Fulcrum-Enterprises   Repository: verify-proof
 #   Workflow: release.yml        Environment: (leave blank)
 #
+# One-time setup on npm (npmjs.com -> verify-proof -> Settings -> Trusted Publisher),
+# added 2026-10-15 so the Node port ships from the same tag:
+#   Publisher: GitHub Actions   Owner: Fulcrum-Enterprises   Repository: verify-proof
+#   Workflow: release.yml       Environment: (leave blank)   Allow npm publish: ticked
+#
 # To ship a release:
-#   1. bump `version` in pyproject.toml (and server.json if the MCP entry changed)
+#   1. bump `version` in pyproject.toml (and server.json if the MCP entry changed);
+#      bump js/package.json too if the Node port changed (the npm job skips when
+#      the version there is already on the registry, so Python-only tags are fine)
 #   2. git tag v0.2.2 && git push --tags
 
 on:
@@ -82,3 +89,37 @@ jobs:
           path: dist/
 
       - uses: pypa/gh-action-pypi-publish@release/v1
+
+  npm:
+    name: Publish the Node port to npm
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # npm Trusted Publishing (OIDC) + provenance
+      contents: read
+    defaults:
+      run:
+        working-directory: js
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24" # npm 11.5+ is needed for OIDC publishing
+          registry-url: https://registry.npmjs.org
+
+      - name: Test
+        run: node test.js
+
+      # A tag that only changes the Python package must not fail here: skip when
+      # js/package.json's version is already on the registry.
+      - name: Decide whether this version is new
+        id: check
+        run: |
+          LOCAL=$(node -p "require('./package.json').version")
+          REMOTE=$(npm view verify-proof version 2>/dev/null || echo none)
+          echo "local=$LOCAL remote=$REMOTE"
+          if [ "$LOCAL" = "$REMOTE" ]; then echo "publish=no" >> "$GITHUB_OUTPUT"; else echo "publish=yes" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Publish with provenance
+        if: steps.check.outputs.publish == 'yes'
+        run: npm publish --provenance --access public
