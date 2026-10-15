@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""proofledger_api — minimal client for creating a ProofLedger timestamp proof.
+"""proofledger_api — minimal client for the ProofLedger API.
 
 This is the one part of verify-proof that talks to a network. Everything else
 in this package (hashing, verification, explanation) runs entirely offline and
@@ -17,9 +17,14 @@ Standard library only, so installing verify-proof still pulls in nothing.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
+import re
 import os
+import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 DEFAULT_BASE_URL = "https://proofledger.io"
@@ -116,6 +121,121 @@ def submit_proof(
         ) from exc
 
 
+def _request(
+    method: str,
+    path: str,
+    payload: dict | None = None,
+    key: str | None = None,
+    base_url: str = DEFAULT_BASE_URL,
+    timeout: int = 30,
+) -> dict:
+    """One authenticated call to the v1 API. Errors become ProofLedgerError."""
+    request = urllib.request.Request(
+        f"{base_url.rstrip('/')}{path}",
+        data=None if payload is None else json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {key or api_key()}",
+            "Content-Type": "application/json",
+            "User-Agent": "verify-proof (https://pypi.org/project/verify-proof/)",
+        },
+        method=method,
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            body = response.read().decode("utf-8")
+            return json.loads(body) if body else {}
+    except urllib.error.HTTPError as exc:
+        raise ProofLedgerError(_http_message(exc)) from exc
+    except urllib.error.URLError as exc:
+        raise ProofLedgerError(
+            f"Could not reach {base_url}: {exc.reason}\n"
+            "Hashing and verification still work offline."
+        ) from exc
+
+
+def _digest(sha256: str) -> str:
+    digest = sha256.strip().lower().removeprefix("0x")
+    if len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
+        raise ProofLedgerError(f"Not a SHA-256 hex digest: {sha256!r}")
+    return digest
+
+
+def submit_batch(
+    items: list[dict],
+    key: str | None = None,
+    base_url: str = DEFAULT_BASE_URL,
+    timeout: int = 60,
+) -> dict:
+    """Anchor up to 100 hashes in one call (POST /api/v1/proofs/batch).
+
+    Each item: {"sha256": ..., "external_id": optional, "filename": optional}.
+    Items are checked first and written together; Polygon only. The response
+    has a `summary` and one entry per item with `result` created / exists /
+    invalid and, for the first two, the `proof`.
+    """
+    if not items or len(items) > 100:
+        raise ProofLedgerError("submit_batch takes 1 to 100 items.")
+    payload = {"items": []}
+    for it in items:
+        out = {"sha256": _digest(it["sha256"])}
+        if it.get("external_id") is not None:
+            out["external_id"] = str(it["external_id"])
+        if it.get("filename"):
+            out["filename"] = str(it["filename"])[:500]
+        payload["items"].append(out)
+    return _request("POST", "/api/v1/proofs/batch", payload, key, base_url, timeout)
+
+
+def get_proof(proof_id: int | str, key: str | None = None, base_url: str = DEFAULT_BASE_URL) -> dict:
+    """One of your proofs by ProofLedger id (GET /api/v1/proof/:id)."""
+    return _request("GET", f"/api/v1/proof/{urllib.parse.quote(str(proof_id))}", None, key, base_url)
+
+
+def get_proof_by_external_id(external_id: str, key: str | None = None, base_url: str = DEFAULT_BASE_URL) -> dict | None:
+    """One of your proofs by your own record id, or None when there is none."""
+    try:
+        r = _request("GET", "/api/v1/proofs?" + urllib.parse.urlencode({"external_id": external_id}), None, key, base_url)
+    except ProofLedgerError as exc:
+        if "404" in str(exc):
+            return None
+        raise
+    return r.get("proof")
+
+
+def get_bundle(proof_id: int | str, chain: str = "polygon", key: str | None = None, base_url: str = DEFAULT_BASE_URL) -> dict:
+    """The bundle for a proof (GET /api/v1/proof/:id/bundle): everything needed
+    to verify it without ProofLedger, in this package's proof-file format.
+    Save it next to the file and `verify-proof verify <file> --proof bundle.json`
+    works offline, for as long as the chain exists."""
+    if chain not in ("polygon", "bitcoin"):
+        raise ProofLedgerError("chain must be 'polygon' or 'bitcoin'")
+    return _request("GET", f"/api/v1/proof/{urllib.parse.quote(str(proof_id))}/bundle?chain={chain}", None, key, base_url)
+
+
+def verify_webhook_signature(
+    secret: str,
+    header: str,
+    raw_body: bytes | str,
+    tolerance_seconds: int = 300,
+    now: int | None = None,
+) -> bool:
+    """Check a ProofLedger webhook delivery before trusting it.
+
+    ProofLedger sends `ProofLedger-Signature: t=<unix>,v1=<hex HMAC-SHA256(secret, t + "." + body)>`.
+    Pass the RAW request body exactly as received; re-serialising it breaks the MAC.
+    Pure computation, no network.
+    """
+    m = re.fullmatch(r"t=(\d+),v1=([0-9a-f]{64})", str(header or ""))
+    if not m:
+        return False
+    t = int(m.group(1))
+    if abs((now if now is not None else int(time.time())) - t) > tolerance_seconds:
+        return False
+    body = raw_body if isinstance(raw_body, bytes) else str(raw_body).encode("utf-8")
+    expected = hmac.new(secret.encode("utf-8"), f"{t}.".encode("utf-8") + body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, m.group(2))
+
+
 def _http_message(exc: urllib.error.HTTPError) -> str:
     """Turn an API error into something the reader can act on."""
     detail = ""
@@ -132,6 +252,12 @@ def _http_message(exc: urllib.error.HTTPError) -> str:
             + (f"\n({detail})" if detail else "")
         )
     if exc.code == 429:
+        retry_after = exc.headers.get("Retry-After") if exc.headers else None
+        if retry_after:
+            return (
+                f"Rate limit: 120 requests per minute per key (429). Retry after {retry_after} s.\n"
+                "One batch call carries up to 100 hashes." + (f"\n({detail})" if detail else "")
+            )
         return (
             "Monthly API proof limit reached (429).\n"
             "Free and Standard include 25 proofs a month, Professional 500, "
@@ -183,7 +309,8 @@ def summarize(proof: dict, base_url: str = DEFAULT_BASE_URL) -> str:
     lines += [
         "",
         "Anchoring is not instant. Polygon usually settles within minutes; "
-        "Bitcoin is Merkle-batched daily. Re-check the proof, or verify the "
+        "Bitcoin, when requested, is anchored in hand-signed batches with no fixed "
+        "timeline. Re-check the proof, or verify the "
         "downloaded proof file offline with:  verify-proof verify <file> "
         "--proof <proof.json>",
     ]

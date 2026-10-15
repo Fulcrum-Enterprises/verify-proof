@@ -3,19 +3,22 @@
 
 A Model Context Protocol (MCP) server that lets MCP-compatible clients
 (Claude Desktop, Cursor, and any other MCP host) verify blockchain-anchored
-timestamp proofs directly. It exposes the `verify-proof` library as four tools
+timestamp proofs directly. It exposes the `verify-proof` library as tools
 so an assistant can, on the user's own machine:
 
   - compute the SHA-256 hash of a local file (the file is never uploaded),
   - verify a local file against a blockchain-anchored proof JSON,
   - verify a known hash against inline proof data,
   - explain in plain language what a proof file asserts,
-  - create a new proof by anchoring a file's hash on ProofLedger.
+  - create a new proof by anchoring a file's hash on ProofLedger,
+  - create proofs for up to 100 files in one call, check a proof's status,
+    and save a proof's bundle so it verifies later without ProofLedger.
 
 The first four run entirely offline and always will: verification that depends
-on the issuing service is not verification. `create_proof` is the exception and
-says so in its own description - anchoring requires a service, and it sends the
-hash (never the file) to ProofLedger, with a free API key.
+on the issuing service is not verification. The ProofLedger tools (create,
+batch, status, bundle) are the exception and say so in their own descriptions:
+anchoring requires a service, and they send hashes (never files) to
+ProofLedger, with a free API key.
 
 Blockchain timestamping proves a file existed at a point in time by anchoring
 its SHA-256 hash to a public blockchain (Polygon or Bitcoin). ProofLedger
@@ -47,7 +50,15 @@ except ImportError as exc:  # pragma: no cover - depends on installed SDK
         f"(underlying import error: {exc})"
     )
 
-from proofledger_api import ProofLedgerError, submit_proof, summarize
+from proofledger_api import (
+    DEFAULT_BASE_URL,
+    ProofLedgerError,
+    get_bundle,
+    get_proof,
+    submit_batch,
+    submit_proof,
+    summarize,
+)
 from verify_proof import hash_file, load_proof
 from verify_proof import verify_proof as _verify_proof
 
@@ -267,6 +278,108 @@ def create_proof(file_path: str, bitcoin: bool = False, send_filename: bool = Tr
     except ProofLedgerError as exc:
         return str(exc)
     return summarize(proof)
+
+
+@mcp.tool()
+def create_proofs_batch(file_paths: list[str], send_filenames: bool = True) -> str:
+    """Create proofs for several local files in ONE ProofLedger API call (up to 100).
+
+    Uses the network and needs PROOFLEDGER_API_KEY, like create_proof. Each
+    file is hashed locally; only the hashes (and filenames, if allowed) are
+    sent. The file name is also used as the external_id, so running this twice
+    on the same files returns the existing proofs instead of creating more.
+    Polygon anchoring only.
+
+    Args:
+        file_paths: Paths of the files to timestamp, 1 to 100.
+        send_filenames: Send each file's name as its label. Set false to send
+                        only the hashes (external ids are still the names).
+    """
+    paths = [Path(p) for p in file_paths]
+    missing = [str(p) for p in paths if not p.is_file()]
+    if missing:
+        return "File not found: " + ", ".join(missing)
+    if not paths or len(paths) > 100:
+        return "Give between 1 and 100 files."
+    items = [
+        {"sha256": hash_file(str(p)), "external_id": p.name, "filename": p.name if send_filenames else None}
+        for p in paths
+    ]
+    try:
+        r = submit_batch(items)
+    except ProofLedgerError as exc:
+        return str(exc)
+    summary = r.get("summary", {})
+    lines = [
+        f"Batch submitted: {summary.get('created', 0)} created, "
+        f"{summary.get('exists', 0)} already existed, {summary.get('invalid', 0)} invalid.",
+        "",
+    ]
+    for it, p in zip(r.get("items", []), paths):
+        proof = it.get("proof") or {}
+        if it.get("result") in ("created", "exists"):
+            lines.append(
+                f"  {p.name}: proof {proof.get('id')} ({it['result']})  "
+                f"{DEFAULT_BASE_URL}{proof.get('certificate_url', '')}"
+            )
+        else:
+            lines.append(f"  {p.name}: {it.get('result')} - {it.get('error', '')}")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def get_proof_status(proof_id: int) -> str:
+    """Fetch the current status of one of YOUR ProofLedger proofs by id.
+
+    Uses the network and needs PROOFLEDGER_API_KEY. Shows whether the Polygon
+    anchor has landed (usually within a minute of creation) and the Bitcoin
+    status when it was requested. For checking somebody else's proof, use
+    verify_file with their bundle instead; that needs no key and no network.
+    """
+    try:
+        p = get_proof(proof_id)
+    except ProofLedgerError as exc:
+        return str(exc)
+    lines = [
+        f"Proof {p.get('id')}  ({p.get('filename') or 'no filename'})",
+        f"  SHA-256        : {p.get('sha256')}",
+        f"  Polygon        : {p.get('polygon_status')}" + (f"  tx {p.get('chain_tx')}" if p.get("chain_tx") else ""),
+        f"  Bitcoin        : {p.get('bitcoin_status')}" + (f"  tx {p.get('bitcoin_txid')}" if p.get("bitcoin_txid") else ""),
+        f"  Created        : {p.get('created_at')}",
+        f"  Certificate    : {DEFAULT_BASE_URL}{p.get('certificate_url', '')}",
+    ]
+    if p.get("issued_via"):
+        lines.append(f"  Recorded through {p['issued_via']} \u00b7 Anchored by ProofLedger")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def save_proof_bundle(proof_id: int, output_path: str, chain: str = "polygon") -> str:
+    """Download the bundle for one of YOUR proofs and save it as a JSON file.
+
+    Uses the network and needs PROOFLEDGER_API_KEY. The bundle is everything
+    needed to verify the proof WITHOUT ProofLedger: hash, chain, transaction
+    id, anchor time and, for Bitcoin, the Merkle path. Save it next to the
+    file; `verify_file` (or `verify-proof verify`) then works offline, for as
+    long as the blockchain exists. Before the anchor lands the bundle says
+    anchored: false; fetch it again afterwards.
+
+    Args:
+        proof_id: The ProofLedger proof id.
+        output_path: Where to write the JSON (e.g. song.mp3.proof.json).
+        chain: "polygon" (default) or "bitcoin" for the top-level fields.
+    """
+    try:
+        bundle = get_bundle(proof_id, chain=chain)
+    except ProofLedgerError as exc:
+        return str(exc)
+    out = Path(output_path)
+    out.write_text(json.dumps(bundle, indent=2), encoding="utf-8")
+    state = "anchored" if bundle.get("anchored") else "NOT YET ANCHORED (fetch again later)"
+    return (
+        f"Saved bundle for proof {proof_id} to {out} ({bundle.get('blockchain')}, {state}). "
+        f"Verify offline with: verify-proof verify <file> --proof {out}"
+    )
 
 
 def main() -> None:

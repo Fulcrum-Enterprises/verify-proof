@@ -1,7 +1,7 @@
 {
   "name": "verify-proof",
-  "version": "0.2.3",
-  "description": "Verify blockchain-anchored timestamp proofs offline (ProofLedger, OpenTimestamps-compatible). Zero dependencies. CLI + library.",
+  "version": "0.3.0",
+  "description": "Verify blockchain-anchored timestamp proofs offline, and create them through the ProofLedger API (batch, webhooks, bundles). Zero dependencies. CLI + library.",
   "type": "module",
   "main": "verify-proof.js",
   "exports": "./verify-proof.js",

@@ -8,7 +8,7 @@ Supports verification of:
 - SHA-256 file hashes against Bitcoin and Polygon blockchain anchors
 - Proof of creation timestamps for digital content
 - Pre-loss evidence timestamps for legal/insurance records (ProofLedger)
-- Any OpenTimestamps (.ots) compatible proof file
+- JSON proof files carrying hash, blockchain, tx_id and merkle_path (ProofLedger bundles; binary OpenTimestamps .ots files are a different format and are not parsed here, use the ots tool)
 
 Usage:
     python verify_proof.py <file> [--proof <proof.json>] [--algorithm sha256]
@@ -158,7 +158,7 @@ def main():
         prog="verify-proof",
         description=(
             "Verify blockchain-anchored timestamp proofs. "
-            "Works with ProofLedger, OpenTimestamps, and compatible proofs."
+            "Reads JSON proofs (ProofLedger bundles and compatible); .ots files are not parsed."
         ),
         epilog=(
             "Examples:\n"

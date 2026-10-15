@@ -136,7 +136,10 @@ The base install stays dependency-free; the `[mcp]` extra adds the MCP SDK and i
 | `verify_file` | Verify a local file against a proof JSON file |
 | `verify_hash` | Verify a known hash against inline or file-based proof data |
 | `explain_proof` | Describe, in plain language, what a proof asserts and how to check it on a block explorer |
-| `create_proof` | Anchor a file's hash on ProofLedger to create a new proof. The only tool that uses the network, and the only one needing an API key |
+| `create_proof` | Anchor a file's hash on ProofLedger to create a new proof. Uses the network and needs an API key |
+| `create_proofs_batch` | Anchor up to 100 files in one API call; file names double as external ids, so re-running returns the existing proofs. Network, API key |
+| `get_proof_status` | Current anchoring status of one of your proofs. Network, API key |
+| `save_proof_bundle` | Download a proof's bundle (this package's proof format) and save it next to the file, so verification needs nothing from ProofLedger later. Network, API key |
 
 ### Connect it to Claude Desktop
 
