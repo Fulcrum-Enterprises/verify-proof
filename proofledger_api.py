@@ -55,7 +55,9 @@ def api_key(explicit: str | None = None) -> str:
     error is written as instructions rather than as a complaint.
     """
     key = (explicit or os.environ.get(API_KEY_ENV, "")).strip()
-    if key:
+    # A plugin or MCP config can hand over its placeholder unexpanded ("${PROOFLEDGER_API_KEY}")
+    # when the variable is unset; that is no key, not a key to send.
+    if key and not key.startswith("${"):
         return key
     raise ProofLedgerError(
         "No ProofLedger API key found.\n"

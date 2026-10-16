@@ -81,6 +81,12 @@ def test_submit_proof_sends_hash_and_label(base_url):
     assert CALLS[-1]["auth"] == "Bearer sk_test"
 
 
+def test_unexpanded_placeholder_counts_as_no_key(monkeypatch):
+    monkeypatch.setenv("PROOFLEDGER_API_KEY", "${PROOFLEDGER_API_KEY}")
+    with pytest.raises(api.ProofLedgerError, match="No ProofLedger API key"):
+        api.api_key()
+
+
 def test_bitcoin_flag_is_ignored_with_a_warning(base_url):
     with pytest.warns(DeprecationWarning, match="Bitcoin"):
         api.submit_proof("ab" * 32, filename="x.pdf", bitcoin=True, key="sk_test", base_url=base_url)

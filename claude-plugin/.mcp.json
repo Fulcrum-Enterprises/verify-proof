@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "verify-proof": {
+      "command": "uvx",
+      "args": ["--from", "verify-proof[mcp]>=0.3.2", "verify-proof-mcp"],
+      "env": {
+        "PROOFLEDGER_API_KEY": "${PROOFLEDGER_API_KEY:-}"
+      }
+    }
+  }
+}

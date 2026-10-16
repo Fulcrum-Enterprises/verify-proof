@@ -127,6 +127,17 @@ On Polygon each proof is its own transaction, so `merkle_path` is empty. Proofs 
 ]
 ```
 
+## Use it in Claude Code (plugin)
+
+This repository is also a Claude Code plugin marketplace. The `proofledger` plugin bundles the MCP server below (started with `uvx`, so it needs [uv](https://docs.astral.sh/uv/) and nothing else) and two skills, `/proofledger:anchor` and `/proofledger:verify`:
+
+```
+/plugin marketplace add Fulcrum-Enterprises/verify-proof
+/plugin install proofledger@proofledger
+```
+
+Then ask: *"Anchor `dist/app-1.4.0.zip` and save its proof next to it."* Creating proofs reads `PROOFLEDGER_API_KEY` from the shell that starts Claude Code; verifying needs no key. Details in [`claude-plugin/`](claude-plugin/).
+
 ## Use as an MCP server (AI assistants)
 
 `verify-proof` ships an optional [Model Context Protocol](https://modelcontextprotocol.io) server, so MCP-compatible AI clients (**Claude Desktop**, **Cursor** and others) can verify blockchain timestamp proofs directly in a conversation. The file never leaves your machine: hashing and verification run locally, and only the resulting hash is ever compared against the proof.

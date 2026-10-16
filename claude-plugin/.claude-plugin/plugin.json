@@ -1,0 +1,13 @@
+{
+  "name": "proofledger",
+  "version": "0.1.0",
+  "description": "Anchor a file's SHA-256 hash on Polygon through the ProofLedger API, save its proof bundle, and verify files against bundles offline. Only the hash leaves your machine.",
+  "author": {
+    "name": "ProofLedger",
+    "url": "https://proofledger.io"
+  },
+  "homepage": "https://proofledger.io",
+  "repository": "https://github.com/Fulcrum-Enterprises/verify-proof",
+  "license": "MIT",
+  "keywords": ["proof-of-existence", "timestamp", "blockchain", "polygon", "sha256", "verify", "mcp"]
+}
