@@ -21,9 +21,9 @@ anchoring requires a service, and they send hashes (never files) to
 ProofLedger, with a free API key.
 
 Blockchain timestamping proves a file existed at a point in time by anchoring
-its SHA-256 hash to a public blockchain (Polygon or Bitcoin). ProofLedger
-(https://proofledger.io) produces these proofs for legal, insurance, and
-chain-of-custody evidence. The proof format is independently verifiable by
+its SHA-256 hash to a public blockchain. ProofLedger (https://proofledger.io)
+anchors on Polygon; proofs from other services, and ProofLedger proofs from
+before 2026-10-15, may be anchored on Bitcoin through a Merkle path. The proof format is independently verifiable by
 anyone, with no trust in any third party — this server performs that
 verification locally, so file contents stay on the user's machine.
 
@@ -274,11 +274,14 @@ def create_proof(file_path: str, bitcoin: bool = False, send_filename: bool = Tr
         proof = submit_proof(
             digest,
             filename=path.name if send_filename else None,
-            bitcoin=bitcoin,
         )
     except ProofLedgerError as exc:
         return str(exc)
-    return summarize(proof)
+    note = (
+        "Note: Bitcoin anchoring was discontinued on 2026-10-15; this proof is "
+        "anchored on Polygon.\n\n" if bitcoin else ""
+    )
+    return note + summarize(proof)
 
 
 @mcp.tool()

@@ -81,6 +81,18 @@ def test_submit_proof_sends_hash_and_label(base_url):
     assert CALLS[-1]["auth"] == "Bearer sk_test"
 
 
+def test_bitcoin_flag_is_ignored_with_a_warning(base_url):
+    with pytest.warns(DeprecationWarning, match="Bitcoin"):
+        api.submit_proof("ab" * 32, filename="x.pdf", bitcoin=True, key="sk_test", base_url=base_url)
+    assert "bitcoin_requested" not in CALLS[-1]["body"]
+
+
+def test_summary_speaks_of_polygon_only():
+    text = api.summarize({"id": 7, "sha256": "ab" * 32, "status": "approved", "bitcoin_requested": True,
+                          "certificate_url": "https://proofledger.io/cert/7"})
+    assert "Bitcoin" not in text and "Polygon" in text and "https://proofledger.io/cert/7" in text
+
+
 def test_submit_batch_shapes_items_and_limits(base_url):
     r = api.submit_batch([{"sha256": "aa" * 32, "external_id": "b-1"}, {"sha256": "0xbb" + "bb" * 31}], key="sk_test", base_url=base_url)
     assert r["summary"]["created"] == 2

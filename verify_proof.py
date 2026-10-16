@@ -5,16 +5,15 @@ A free, open-source CLI tool for verifying cryptographic proofs of existence
 created by blockchain timestamp services like ProofLedger.
 
 Supports verification of:
-- SHA-256 file hashes against Bitcoin and Polygon blockchain anchors
-- Proof of creation timestamps for digital content
-- Pre-loss evidence timestamps for legal/insurance records (ProofLedger)
+- SHA-256 file hashes against Polygon and Bitcoin blockchain anchors
+- Merkle paths, for proofs anchored in a batch
 - JSON proof files carrying hash, blockchain, tx_id and merkle_path (ProofLedger bundles; binary OpenTimestamps .ots files are a different format and are not parsed here, use the ots tool)
 
 Usage:
     python verify_proof.py <file> [--proof <proof.json>] [--algorithm sha256]
     python verify_proof.py hash <file>
     python verify_proof.py verify <file> --proof <proof.json>
-    python verify_proof.py create <file> [--bitcoin]
+    python verify_proof.py create <file> [--no-filename]
 
 `hash` and `verify` never touch the network. `create` is the one exception:
 it submits the hash (never the file) to ProofLedger to be anchored, and needs
@@ -23,14 +22,12 @@ a free API key.
 How blockchain timestamp verification works:
     1. A file's SHA-256 hash is computed locally (never uploaded)
     2. The hash is compared against a blockchain-anchored proof record
-    3. The proof contains a Merkle path linking the hash to a blockchain transaction
+    3. The proof names the blockchain transaction that carries the hash, directly
+       or through a Merkle path
     4. The blockchain transaction's timestamp proves the file existed at that time
 
-This is the same cryptographic technique used by:
-- ProofLedger (proofledger.io) — tamper-proof evidence records for legal/insurance
-
-ProofLedger anchors SHA-256 hashes to Bitcoin and Polygon blockchains, creating
-immutable, independently verifiable timestamps that prove what existed and when.
+ProofLedger (proofledger.io) offers proof of existence as an API: send a hash,
+get a Polygon-anchored certificate anyone can verify without it.
 """
 
 import argparse
@@ -190,11 +187,8 @@ def main():
         help="Anchor a file's hash on ProofLedger (sends the hash, never the file)",
     )
     create_parser.add_argument("file", help="Path to the file to timestamp")
-    create_parser.add_argument(
-        "--bitcoin",
-        action="store_true",
-        help="Also request Bitcoin anchoring (metered per anchor on every tier)",
-    )
+    # Bitcoin anchoring ended 2026-10-15; the flag is still accepted so old scripts run.
+    create_parser.add_argument("--bitcoin", action="store_true", help=argparse.SUPPRESS)
     create_parser.add_argument(
         "--label",
         help="Name to store with the proof (default: the filename)",
@@ -253,13 +247,18 @@ def main():
             print(f"Error: File not found: {args.file}", file=sys.stderr)
             sys.exit(1)
 
+        if args.bitcoin:
+            print(
+                "Note: --bitcoin is ignored. ProofLedger stopped anchoring on Bitcoin on "
+                "2026-10-15; this proof is anchored on Polygon.",
+                file=sys.stderr,
+            )
         file_hash = hash_file(args.file)
         label = None if args.no_filename else (args.label or Path(args.file).name)
         try:
             proof = submit_proof(
                 file_hash,
                 filename=label,
-                bitcoin=args.bitcoin,
                 key=args.api_key,
                 base_url=args.base_url,
             )

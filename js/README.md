@@ -102,7 +102,7 @@ app.post("/hooks/proofledger", express.raw({ type: "application/json" }), (req, 
     return res.status(400).end();
   }
   const event = JSON.parse(req.body);             // { id, type, data: { proof, bundle } }
-  // event.type is "proof.polygon.anchored" or "proof.bitcoin.anchored"; dedupe on event.id
+  // event.type is "proof.polygon.anchored"; dedupe on event.id
   res.status(200).end();
 });
 ```

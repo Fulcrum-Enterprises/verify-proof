@@ -26,6 +26,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import warnings
 
 DEFAULT_BASE_URL = "https://proofledger.io"
 API_KEY_ENV = "PROOFLEDGER_API_KEY"
@@ -82,9 +83,9 @@ def submit_proof(
         sha256: 64-character hex digest, computed locally.
         filename: Optional label so the proof is findable in the dashboard.
                   Pass None to send nothing but the hash.
-        bitcoin: Request Bitcoin anchoring as well as Polygon. Bitcoin is
-                 metered per anchor on every tier, so the proof comes back
-                 marked REQUIRED until the anchor is paid for.
+        bitcoin: Ignored. ProofLedger stopped anchoring on Bitcoin on
+                 2026-10-15; every proof is anchored on Polygon. Kept so
+                 existing callers do not break, with a DeprecationWarning.
         key: API key; falls back to the environment.
         base_url: Override for staging or a private deployment.
     """
@@ -96,7 +97,12 @@ def submit_proof(
     if filename:
         payload["filename"] = filename[:500]
     if bitcoin:
-        payload["bitcoin_requested"] = True
+        warnings.warn(
+            "bitcoin=True is ignored: ProofLedger stopped anchoring on Bitcoin on "
+            "2026-10-15. Every proof is anchored on Polygon.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
     request = urllib.request.Request(
         f"{base_url.rstrip('/')}/api/v1/proof",
@@ -283,15 +289,6 @@ def summarize(proof: dict, base_url: str = DEFAULT_BASE_URL) -> str:
         f"  Created       : {proof.get('created_at', '')}",
     ]
 
-    if proof.get("bitcoin_requested"):
-        payment = proof.get("btc_payment_status", "NONE")
-        lines.append(f"  Bitcoin       : requested, payment {payment}")
-        if payment == "REQUIRED":
-            lines.append(
-                "                  (Polygon anchoring is already under way; the "
-                "Bitcoin anchor is metered and waits for payment)"
-            )
-
     duplicate = proof.get("duplicate_of")
     if duplicate:
         lines += [
@@ -309,10 +306,8 @@ def summarize(proof: dict, base_url: str = DEFAULT_BASE_URL) -> str:
 
     lines += [
         "",
-        "Anchoring is not instant. Polygon usually settles within minutes; "
-        "Bitcoin, when requested, is anchored in hand-signed batches with no fixed "
-        "timeline. Re-check the proof, or verify the "
-        "downloaded proof file offline with:  verify-proof verify <file> "
-        "--proof <proof.json>",
+        "Anchoring is not instant: the Polygon anchor usually lands within a "
+        "minute. Re-check the proof, or save its bundle and verify it offline "
+        "with:  verify-proof verify <file> --proof <proof.json>",
     ]
     return "\n".join(lines)

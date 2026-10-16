@@ -266,13 +266,14 @@ export class ProofLedger {
    * @param {string} p.sha256 64 hex characters, computed locally
    * @param {string} [p.externalId] your own record id, unique per account, up to 128 chars
    * @param {string} [p.filename] label shown on the certificate
-   * @param {boolean} [p.bitcoin=false] also request the paid Bitcoin anchor
+   * @param {boolean} [p.bitcoin=false] ignored: Bitcoin anchoring ended on 2026-10-15
+   *   and every proof is anchored on Polygon; kept so existing callers do not break
    */
   async createProof({ sha256, externalId, filename, bitcoin = false }) {
     const body = { sha256: normalizeHash(sha256) };
     if (externalId !== undefined) body.external_id = String(externalId);
     if (filename !== undefined) body.filename = String(filename).slice(0, 500);
-    if (bitcoin) body.bitcoin_requested = true;
+    if (bitcoin) console.warn("verify-proof: the bitcoin option is ignored. ProofLedger stopped anchoring on Bitcoin on 2026-10-15; every proof is anchored on Polygon.");
     return this.request("POST", "/api/v1/proof", body);
   }
 

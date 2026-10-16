@@ -139,6 +139,19 @@ await test("createProof sends the hash, external_id and filename with the Bearer
   assert.match(c.ua, /verify-proof-js/);
 });
 
+await test("createProof ignores the retired bitcoin option and never sends bitcoin_requested", async () => {
+  const warned = [];
+  const orig = console.warn;
+  console.warn = (m) => warned.push(String(m));
+  try {
+    await pl.createProof({ sha256: "0F".repeat(32), bitcoin: true });
+  } finally {
+    console.warn = orig;
+  }
+  assert.equal("bitcoin_requested" in calls.at(-1).body, false);
+  assert.match(warned.join(" "), /Bitcoin/);
+});
+
 await test("createProof rejects a non-hex hash before any request", async () => {
   const before = calls.length;
   await assert.rejects(() => pl.createProof({ sha256: "nope" }), /Not a SHA-256/);
