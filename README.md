@@ -92,8 +92,8 @@ verify-proof create document.pdf --no-filename   # send only the hash
 
 Only the 64-character SHA-256 digest leaves your machine, plus the filename
 unless you pass `--no-filename`. The file itself is never uploaded, on any
-command. Free accounts include 25 API proofs a month and unlimited Polygon
-anchoring through the web app:
+command. The Free plan includes 100 API proofs a month, and up to 1,000
+uploads a month through the web app (fair use):
 
 [proofledger.io](https://proofledger.io/login.html?utm_source=verify-proof&utm_medium=readme&utm_campaign=create)
 

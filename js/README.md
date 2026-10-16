@@ -52,7 +52,7 @@ if (result.verified) {
 
 ## Create proofs (ProofLedger API)
 
-Needs an API key: free on every plan, from **Account > API Keys** at [proofledger.io](https://proofledger.io/login.html). The free plan includes 25 API proofs a month. Full reference: [proofledger.io/api.html](https://proofledger.io/api.html); integration guide: [proofledger.io/platforms](https://proofledger.io/platforms).
+Needs an API key: free on every plan, from **Account > API Keys** at [proofledger.io](https://proofledger.io/login.html). The Free plan includes 100 API proofs a month. Full reference: [proofledger.io/api.html](https://proofledger.io/api.html); integration guide: [proofledger.io/platforms](https://proofledger.io/platforms).
 
 ```js
 import { hashFile, verifyProof, ProofLedger } from "verify-proof";

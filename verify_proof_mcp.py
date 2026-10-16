@@ -246,8 +246,9 @@ def create_proof(file_path: str, bitcoin: bool = False, send_filename: bool = Tr
     needs an account. Use it when the user wants to PROVE a file exists as of
     now, rather than check an existing proof. The file's SHA-256 is computed
     locally and only that digest is sent - the file itself never leaves the
-    machine. The hash is anchored on Polygon (included on every plan, free
-    tier included); Bitcoin anchoring is metered per anchor.
+    machine. The hash is anchored on Polygon, the only chain ProofLedger
+    anchors to (Bitcoin anchoring was discontinued on 2026-10-15). Each call
+    counts toward the plan's monthly API allowance (Free includes 100).
 
     Requires a ProofLedger API key in the PROOFLEDGER_API_KEY environment
     variable. If it is missing, this returns the steps to get a free one -
@@ -255,8 +256,8 @@ def create_proof(file_path: str, bitcoin: bool = False, send_filename: bool = Tr
 
     Args:
         file_path: Path to the file to timestamp.
-        bitcoin: Also request Bitcoin anchoring. Metered per anchor, so the
-                 proof returns marked REQUIRED until that anchor is paid for.
+        bitcoin: Deprecated. Bitcoin anchoring was discontinued on
+                 2026-10-15; leave this false.
         send_filename: Send the filename as a label so the proof is findable
                        in the dashboard. Set false to send only the hash.
 

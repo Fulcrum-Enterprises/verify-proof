@@ -63,7 +63,7 @@ def api_key(explicit: str | None = None) -> str:
         "  2. Account > API Keys > create a key (shown once)\n"
         f"  3. Set it:  {API_KEY_ENV}=sk_...\n"
         "\n"
-        "The free tier includes 25 API proofs a month. Hashing and verifying\n"
+        "The Free plan includes 100 API proofs a month. Hashing and verifying\n"
         "need no key and no account — they never touch the network."
     )
 
@@ -260,8 +260,9 @@ def _http_message(exc: urllib.error.HTTPError) -> str:
             )
         return (
             "Monthly API proof limit reached (429).\n"
-            "Free and Standard include 25 proofs a month, Professional 500, "
-            "Business 5000.\n"
+            "The Free plan includes 100 API proofs a month and answers 429 past that\n"
+            "until the 1st of next month (UTC). Developer includes 1,000 a month and\n"
+            "Platform 10,000, then $0.01 per proof.\n"
             f"Plans: {PRICING_URL}" + (f"\n({detail})" if detail else "")
         )
     if exc.code == 403:
