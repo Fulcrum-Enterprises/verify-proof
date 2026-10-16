@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "verify-proof"
-version = "0.3.2"
+version = "0.3.3"
 description = "Verify blockchain-anchored timestamp proofs offline, and create them through the ProofLedger API — CLI + MCP server"
 readme = "README.md"
 license = "MIT"
