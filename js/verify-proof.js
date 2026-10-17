@@ -21,8 +21,11 @@
  * How verification works:
  *   1. The file's SHA-256 hash is computed locally (the file is never uploaded)
  *   2. The hash is compared against the proof's recorded hash
- *   3. If the proof carries a Merkle path, it is walked to recompute the root
- *   4. The blockchain transaction referenced by the proof carries the timestamp
+ *   3. If the proof carries a Merkle path, it is walked to compute the root,
+ *      which is printed for comparison with the root in the transaction
+ *   4. The blockchain transaction named by the proof carries the timestamp.
+ *      Nothing here reads the chain: look the transaction up on a block
+ *      explorer to confirm it
  *
  * Proof files are JSON ({ hash, blockchain, tx_id, anchored_at, merkle_path }),
  * which is what ProofLedger's bundle endpoint and webhooks return. Binary
@@ -42,7 +45,7 @@ import { createReadStream, readFileSync, existsSync } from "node:fs";
 
 /**
  * Compute the cryptographic hash of a file, streaming so large files
- * (bodycam video, disk images) do not need to fit in memory.
+ * (video, disk images) do not need to fit in memory.
  * @param {string} filepath
  * @param {string} [algorithm="sha256"]
  * @returns {Promise<string>} lowercase hex digest
@@ -67,12 +70,29 @@ export function loadProof(proofPath) {
 }
 
 /**
+ * Public block-explorer link for a transaction, where one is known.
+ * @param {string} blockchain
+ * @param {string} txId
+ * @returns {string} the link, or "" when none is known
+ */
+function explorerUrl(blockchain, txId) {
+  const b = String(blockchain ?? "").toLowerCase();
+  if (txId && (b === "polygon" || b === "matic")) return `https://polygonscan.com/tx/${txId}`;
+  return "";
+}
+
+/**
  * Verify a blockchain timestamp proof against a file hash.
  *
  * Checks, in order:
  *   1. the proof's recorded hash matches the given hash,
- *   2. the Merkle path recomputes (when the proof carries one),
- *   3. a blockchain transaction reference is present.
+ *   2. a blockchain transaction reference is present.
+ *
+ * When the proof carries a Merkle path, the root is computed and returned as
+ * `merkle_root` for comparison with the root recorded in the transaction.
+ * Nothing here reads the chain, so the message reports the transaction as
+ * what the bundle says. `merkle_verified` is kept for compatibility and means
+ * only that a root was computed.
  *
  * Mirrors the Python implementation field for field so the two ports never
  * disagree about a proof.
@@ -95,7 +115,9 @@ export function verifyProof(fileHash, proof) {
 
   // Step 1: hash match
   if (fileHash.toLowerCase() !== result.proof_hash.toLowerCase()) {
-    result.error = "Hash mismatch — file has been modified since timestamping";
+    result.error =
+      "Hash mismatch: this is not the file the proof was made for " +
+      "(it was changed, or it is a different file)";
     return result;
   }
 
@@ -114,13 +136,29 @@ export function verifyProof(fileHash, proof) {
     result.merkle_verified = true;
   }
 
-  // Step 3: blockchain anchor reference
+  // Step 3: the bundle names a transaction. Reported as the bundle's claim,
+  // because this offline check never reads the chain. Same text as Python.
   if (result.tx_id) {
     result.verified = true;
-    result.message =
-      `Proof verified. File hash matches blockchain anchor on ${result.blockchain}. ` +
-      `Transaction: ${result.tx_id}. ` +
-      `Anchored at: ${result.anchored_at}.`;
+    const when = result.anchored_at ? ` at ${result.anchored_at}` : "";
+    let message =
+      "File matches the proof bundle. " +
+      `The bundle says it was anchored on ${result.blockchain}${when} ` +
+      `in transaction ${result.tx_id}.`;
+    if (result.merkle_root !== undefined) {
+      message +=
+        ` Merkle root computed from the path: ${result.merkle_root}. ` +
+        "Compare it with the root recorded in the transaction.";
+    }
+    message += " Look that transaction up on a block explorer to confirm it";
+    const link = explorerUrl(result.blockchain, result.tx_id);
+    if (link) {
+      result.explorer_url = link;
+      message += `: ${link}`;
+    } else {
+      message += ".";
+    }
+    result.message = message;
   } else {
     result.error = "No blockchain transaction ID in proof — cannot verify anchor";
   }

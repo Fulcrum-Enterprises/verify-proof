@@ -1,6 +1,6 @@
 {
   "name": "verify-proof",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Verify blockchain-anchored timestamp proofs offline, and create them through the ProofLedger API (batch, webhooks, bundles). Zero dependencies. CLI + library.",
   "type": "module",
   "main": "verify-proof.js",
@@ -25,13 +25,10 @@
     "proof-of-existence",
     "sha256",
     "merkle",
-    "bitcoin",
     "polygon",
-    "evidence",
-    "chain-of-custody",
-    "digital-forensics",
     "proofledger",
-    "opentimestamps"
+    "timestamping",
+    "api"
   ],
   "author": "Craig Solomon <craig@fulcrumenterprises.tech>",
   "license": "MIT",

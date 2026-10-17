@@ -22,7 +22,7 @@ async function test(name, fn) {
 
 await test("hashFile matches the fixture's known digest", async () => {
   const digest = await hashFile(new URL("../examples/sample.txt", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1"));
-  assert.equal(digest, "00d3f851ccc4b5df700b648d548de8758bd634233da29289dcd22474c2695859");
+  assert.equal(digest, "849e5f20ed851be78f67da44544a139386d79d6d4c5568abc49656469e485eb7");
 });
 
 await test("verifyProof verifies the fixture proof", async () => {
@@ -32,13 +32,25 @@ await test("verifyProof verifies the fixture proof", async () => {
   assert.equal(result.verified, true);
   assert.equal(result.blockchain, "polygon");
   assert.equal(result.merkle_verified, true);
-  assert.match(result.message, /Proof verified/);
+  assert.match(result.message, /^File matches the proof bundle\. The bundle says it was anchored on polygon at 2026-03-15T10:30:00Z in transaction 0x9f2c/);
+  assert.ok(result.message.includes(`Merkle root computed from the path: ${result.merkle_root}. Compare it with the root recorded in the transaction.`));
+  assert.ok(result.message.endsWith(`Look that transaction up on a block explorer to confirm it: https://polygonscan.com/tx/${result.tx_id}`));
+  assert.equal(result.explorer_url, `https://polygonscan.com/tx/${result.tx_id}`);
+  assert.doesNotMatch(result.message, /Proof verified|matches blockchain anchor/, "the offline check never reads the chain");
+});
+
+await test("a non-Polygon bundle gets the same wording without a polygonscan link", () => {
+  const h = "ab".repeat(32);
+  const result = verifyProof(h, { hash: h, blockchain: "bitcoin", tx_id: "deadbeef" });
+  assert.equal(result.verified, true);
+  assert.equal(result.message, "File matches the proof bundle. The bundle says it was anchored on bitcoin in transaction deadbeef. Look that transaction up on a block explorer to confirm it.");
+  assert.equal(result.explorer_url, undefined);
 });
 
 await test("a modified file fails with a hash mismatch", () => {
   const result = verifyProof("deadbeef".repeat(8), { hash: "00d3f851".padEnd(64, "0"), tx_id: "0xabc" });
   assert.equal(result.verified, false);
-  assert.match(result.error, /Hash mismatch/);
+  assert.match(result.error, /^Hash mismatch: this is not the file the proof was made for \(it was changed, or it is a different file\)$/);
 });
 
 await test("a proof without a tx_id fails with the anchor error", () => {

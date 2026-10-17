@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "verify-proof"
-version = "0.3.3"
+version = "0.3.4"
 description = "Verify blockchain-anchored timestamp proofs offline, and create them through the ProofLedger API — CLI + MCP server"
 readme = "README.md"
 license = "MIT"
@@ -13,9 +13,8 @@ authors = [
     {name = "Craig Solomon", email = "craig@fulcrumenterprises.tech"},
 ]
 keywords = [
-    "blockchain", "timestamp", "verification", "proof-of-existence",
-    "sha256", "bitcoin", "polygon", "evidence", "copyright",
-    "chain-of-custody", "digital-forensics", "proofledger",
+    "blockchain", "timestamp", "timestamping", "verification",
+    "proof-of-existence", "sha256", "polygon", "proofledger", "api",
 ]
 classifiers = [
     # Beta rather than Alpha as of 0.2.3: the CLI surface has been stable
@@ -26,7 +25,6 @@ classifiers = [
     "Environment :: Console",
     "Intended Audience :: Developers",
     "Intended Audience :: Information Technology",
-    "Intended Audience :: Legal Industry",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",

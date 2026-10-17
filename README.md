@@ -37,10 +37,10 @@ python verify_proof.py --help
 
 ```bash
 verify-proof verify contract.pdf --proof bundle.json
-# VERIFIED: Proof verified. File hash matches blockchain anchor on polygon. Transaction: 0xabc123.... Anchored at: 2026-10-15T02:11:09.512Z.
+# VERIFIED: File matches the proof bundle. The bundle says it was anchored on polygon at 2026-10-15T02:11:09.512Z in transaction 0xabc123.... Look that transaction up on a block explorer to confirm it: https://polygonscan.com/tx/0xabc123...
 ```
 
-The check runs locally: it hashes the file, compares the result with the hash in the bundle, walks the Merkle path if there is one, and reports the transaction to look up on a block explorer. Nothing is sent anywhere, so it works the same whether or not the service that issued the proof still exists.
+The check runs locally: it hashes the file, compares the result with the hash in the bundle, computes the Merkle root if the bundle has a path, and reports the transaction to look up on a block explorer. It does not read the chain, so until you look that transaction up, the anchor is what the bundle says. Nothing is sent anywhere, so it works the same whether or not the service that issued the proof still exists.
 
 ### Compute a file's SHA-256 hash
 
@@ -52,8 +52,8 @@ verify-proof hash contract.pdf
 
 ### Quiet by default
 
-A successful `verify` prints one line to stderr saying where proofs like it come
-from. It is suppressed whenever the output is piped or redirected, so scripts
+A successful `verify` prints one line to stderr saying where to make proofs like
+it. It is suppressed whenever the output is piped or redirected, so scripts
 never see it, and stdout is unchanged either way. To silence it everywhere:
 
 ```bash
@@ -118,7 +118,7 @@ A bundle is one JSON document. Abridged:
 }
 ```
 
-On Polygon each proof is its own transaction, so `merkle_path` is empty. Proofs anchored in a Merkle batch, such as Bitcoin-anchored proofs from other services and ProofLedger proofs from before October 2026, carry the path, and `verify` checks it up to the root:
+On Polygon each proof is its own transaction, so `merkle_path` is empty. Bitcoin-anchored proofs, from other services or the few ProofLedger proofs anchored on Bitcoin before 2026-10-15, carry the path. If a Merkle path is present, `verify` computes the Merkle root and prints it. Compare it with the root recorded in the transaction:
 
 ```json
 "merkle_path": [
@@ -126,6 +126,8 @@ On Polygon each proof is its own transaction, so `merkle_path` is empty. Proofs 
   {"hash": "789abc...", "position": "left"}
 ]
 ```
+
+[`examples/`](examples/) holds a format sample: `sample.txt` and a `proof.json` that carries its hash. The transaction in it is made up and does not exist on Polygon, so a block explorer finds nothing. It shows the file format only, not a real anchor.
 
 ## Use it in Claude Code (plugin)
 
@@ -159,7 +161,7 @@ The base install stays dependency-free; the `[mcp]` extra adds the MCP SDK and i
 | `verify_hash` | Verify a known hash against inline or file-based proof data |
 | `explain_proof` | Describe, in plain language, what a proof asserts and how to check it on a block explorer |
 | `create_proof` | Anchor a file's hash on ProofLedger to create a new proof. Uses the network and needs an API key |
-| `create_proofs_batch` | Anchor up to 100 files in one API call; file names double as external ids, so re-running returns the existing proofs. Network, API key |
+| `create_proofs_batch` | Anchor up to 100 files in one API call; file names double as external ids, so re-running on unchanged files returns their existing proofs. If a file changed but kept its name, you get its old proof back, so rename it or anchor it with `create_proof`. Network, API key |
 | `get_proof_status` | Current anchoring status of one of your proofs. Network, API key |
 | `save_proof_bundle` | Download a proof's bundle (this package's proof format) and save it next to the file, so verification needs nothing from ProofLedger later. Network, API key |
 
@@ -185,15 +187,15 @@ Then ask the assistant things like:
 - *"What does this proof file actually prove?"*
 - *"Timestamp this file and save its bundle next to it."*
 
-> The verification tools need no account, no network calls and no trust in any third party. The create, batch, status and bundle tools are the exception: they send hashes, never files, to ProofLedger with your API key.
+> The verification tools need no account and make no network calls. To confirm the anchor itself, look up the transaction on any block explorer. The create, batch, status and bundle tools are the exception: they send hashes and file names, never files, to ProofLedger with your API key.
 
 ## How it works
 
 1. `verify-proof` computes the SHA-256 hash of your local file
 2. It reads the proof JSON to get the originally anchored hash
 3. If the hashes match, the file hasn't been modified since timestamping
-4. If a Merkle path is present, it verifies the path to the Merkle root
-5. The blockchain transaction ID can be independently verified on any block explorer
+4. If a Merkle path is present, it computes the Merkle root and prints it; compare it with the root recorded in the transaction
+5. It does not read the chain: look the transaction up on any block explorer to confirm the anchor (for Polygon, the verdict prints the polygonscan link)
 
 ## What a proof shows, and what it does not
 

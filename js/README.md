@@ -30,8 +30,10 @@ verify-proof hash document.pdf
 
 # Verify a file against a proof (a ProofLedger bundle, or any JSON proof with hash/blockchain/tx_id/merkle_path)
 verify-proof verify document.pdf --proof bundle.json
-# VERIFIED: Proof verified. File hash matches blockchain anchor on polygon. ...
+# VERIFIED: File matches the proof bundle. The bundle says it was anchored on polygon at ... in transaction 0x.... Look that transaction up on a block explorer to confirm it: https://polygonscan.com/tx/0x...
 ```
+
+The check never reads the chain: until you look the transaction up, the anchor is what the bundle says.
 
 Exit code `0` on verified, `1` on any failure, safe to gate a CI job on. Binary OpenTimestamps `.ots` files are a different format and are not parsed; use the `ots` tool for those.
 
@@ -44,7 +46,7 @@ const digest = await hashFile("document.pdf");           // streaming, any size
 const result = verifyProof(digest, loadProof("bundle.json"));
 
 if (result.verified) {
-  console.log(result.message);        // includes chain, tx id, anchored-at
+  console.log(result.message);        // chain, tx id and anchor time as the bundle states them, plus the explorer link for Polygon
 } else {
   console.error(result.error);        // hash mismatch, missing anchor, ...
 }
@@ -65,7 +67,7 @@ const proof = await pl.createProof({
   externalId: "song-42",
   filename: "song.mp3",
 });
-console.log(proof.id, proof.certificate_url);   // e.g. 42, "/cert/42"
+console.log(proof.id, proof.certificate_url);   // e.g. 42, "https://proofledger.io/cert/42"
 
 // Up to 100 at once, checked first and written together (Polygon only).
 const batch = await pl.createProofs([
@@ -107,13 +109,13 @@ app.post("/hooks/proofledger", express.raw({ type: "application/json" }), (req, 
 });
 ```
 
-`pl.listWebhooks()`, `pl.deleteWebhook(id)`, `pl.testWebhook(id)` and `pl.getBranding()` cover the rest of the API.
+`pl.listWebhooks()`, `pl.deleteWebhook(id)`, `pl.testWebhook(id)` and `pl.getBranding()` cover webhooks and branding. The public `GET /api/v1/verify?hash=` lookup has no client method; offline verification does not need it.
 
 ## What verification checks
 
 1. The file's SHA-256, computed locally, matches the proof's recorded hash
-2. The Merkle path (when present) recomputes to its root
-3. The proof references a blockchain transaction, whose timestamp is the evidence
+2. If a Merkle path is present, the Merkle root is computed and printed. Compare it with the root recorded in the transaction
+3. The proof names a blockchain transaction. Nothing here reads the chain: look the transaction up on a block explorer to confirm the anchor and its time
 
 ## What it does not prove
 

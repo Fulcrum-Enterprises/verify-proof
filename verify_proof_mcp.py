@@ -22,10 +22,11 @@ ProofLedger, with a free API key.
 
 Blockchain timestamping proves a file existed at a point in time by anchoring
 its SHA-256 hash to a public blockchain. ProofLedger (https://proofledger.io)
-anchors on Polygon; proofs from other services, and ProofLedger proofs from
-before 2026-10-15, may be anchored on Bitcoin through a Merkle path. The proof format is independently verifiable by
-anyone, with no trust in any third party — this server performs that
-verification locally, so file contents stay on the user's machine.
+anchors on Polygon; proofs from other services, and the few ProofLedger proofs
+anchored on Bitcoin before 2026-10-15, may be anchored on Bitcoin through a
+Merkle path. The verification tools need no account and make no network calls,
+so file contents stay on the user's machine. To confirm the anchor itself, look
+up the transaction on any block explorer.
 
 Run:
     verify-proof-mcp            # stdio transport (Claude Desktop, Cursor, etc.)
@@ -92,15 +93,22 @@ def _explorer_url(blockchain: str, tx_id: str) -> str:
     return ""
 
 
+def _absolute_url(url: str | None) -> str:
+    """The API returns absolute links; older responses gave a path. Accept both."""
+    if not url:
+        return ""
+    return url if url.startswith("http") else f"{DEFAULT_BASE_URL}{url}"
+
+
 def _format_result(result: dict) -> str:
     """Human-readable headline + full structured result for the model to reason over."""
     if result.get("verified"):
         headline = "VERIFIED ✓ — " + result.get(
-            "message", "File hash matches the blockchain anchor."
+            "message", "File matches the proof bundle."
         )
         explorer = _explorer_url(result.get("blockchain", ""), result.get("tx_id", ""))
-        if explorer:
-            headline += f"\nIndependently check the transaction: {explorer}"
+        if explorer and explorer not in headline:
+            headline += f"\nLook the transaction up to confirm the anchor: {explorer}"
     else:
         headline = "NOT VERIFIED ✗ — " + result.get(
             "error", "Verification failed."
@@ -116,8 +124,8 @@ def compute_file_hash(file_path: str, algorithm: str = "sha256") -> str:
     """Compute the cryptographic hash of a local file.
 
     The file is read and hashed locally; its contents are never uploaded or
-    transmitted. SHA-256 (the default) is the algorithm used by Bitcoin,
-    Polygon, and blockchain timestamp services such as ProofLedger. Use this to
+    transmitted. SHA-256 (the default) is the algorithm ProofLedger and most
+    timestamp services use. Use this to
     obtain the fingerprint that a timestamp proof anchors, or to confirm a file
     has not changed.
 
@@ -142,11 +150,13 @@ def verify_file(file_path: str, proof_path: str, algorithm: str = "sha256") -> s
     """Verify a local file against a blockchain-anchored timestamp proof.
 
     Recomputes the file's hash locally and checks it against the hash recorded
-    in the proof JSON. If a Merkle path is present, it recomputes the Merkle
-    root. Confirms a blockchain transaction reference is present. A passing
-    result means the file is byte-for-byte identical to the file that was
-    timestamped, and the proof points to a public transaction (on Polygon or
-    Bitcoin) that anyone can check on a block explorer.
+    in the proof JSON. If a Merkle path is present, it computes the Merkle
+    root and returns it, to compare with the root recorded in the transaction.
+    Confirms a blockchain transaction reference is present. A passing result
+    means the file is byte-for-byte the one the bundle was made for. The tool
+    does not read the chain: the transaction (on Polygon or Bitcoin) is what
+    the bundle says until someone looks it up on a block explorer, so give the
+    user that link.
 
     Args:
         file_path: Path to the local file to verify.
@@ -242,11 +252,12 @@ def explain_proof(proof_json: str) -> str:
 def create_proof(file_path: str, bitcoin: bool = False, send_filename: bool = True) -> str:
     """Create a blockchain timestamp proof for a local file, via ProofLedger.
 
-    This is the only tool here that uses the network, and the only one that
-    needs an account. Use it when the user wants to PROVE a file exists as of
+    This tool, like the batch, status and bundle tools, uses the network and
+    needs an API key. Use it when the user wants to PROVE a file exists as of
     now, rather than check an existing proof. The file's SHA-256 is computed
-    locally and only that digest is sent - the file itself never leaves the
-    machine. The hash is anchored on Polygon, the only chain ProofLedger
+    locally. Only that digest is sent, plus the file name unless send_filename
+    is false. The file itself never leaves the machine. The hash is anchored
+    on Polygon, the only chain ProofLedger
     anchors to (Bitcoin anchoring was discontinued on 2026-10-15). Each call
     counts toward the plan's monthly API allowance (Free includes 100).
 
@@ -289,15 +300,17 @@ def create_proofs_batch(file_paths: list[str], send_filenames: bool = True) -> s
     """Create proofs for several local files in ONE ProofLedger API call (up to 100).
 
     Uses the network and needs PROOFLEDGER_API_KEY, like create_proof. Each
-    file is hashed locally; only the hashes (and filenames, if allowed) are
-    sent. The file name is also used as the external_id, so running this twice
-    on the same files returns the existing proofs instead of creating more.
+    file is hashed locally; the hashes and the file names are sent, never the
+    files. The file name is used as the external_id, so re-running on
+    unchanged files returns their existing proofs. If a file changed but kept
+    its name, you get its old proof back (result "exists"), and that proof does
+    not match the new file: rename the file, or anchor it with create_proof.
     Polygon anchoring only.
 
     Args:
         file_paths: Paths of the files to timestamp, 1 to 100.
-        send_filenames: Send each file's name as its label. Set false to send
-                        only the hashes (external ids are still the names).
+        send_filenames: Send each file's name as its label. Set false to leave
+                        the label out; the names are still sent as external ids.
     """
     paths = [Path(p) for p in file_paths]
     missing = [str(p) for p in paths if not p.is_file()]
@@ -324,7 +337,7 @@ def create_proofs_batch(file_paths: list[str], send_filenames: bool = True) -> s
         if it.get("result") in ("created", "exists"):
             lines.append(
                 f"  {p.name}: proof {proof.get('id')} ({it['result']})  "
-                f"{DEFAULT_BASE_URL}{proof.get('certificate_url', '')}"
+                f"{_absolute_url(proof.get('certificate_url'))}"
             )
         else:
             lines.append(f"  {p.name}: {it.get('result')} - {it.get('error', '')}")
@@ -336,9 +349,10 @@ def get_proof_status(proof_id: int) -> str:
     """Fetch the current status of one of YOUR ProofLedger proofs by id.
 
     Uses the network and needs PROOFLEDGER_API_KEY. Shows whether the Polygon
-    anchor has landed (usually within a minute of creation) and the Bitcoin
-    status when it was requested. For checking somebody else's proof, use
-    verify_file with their bundle instead; that needs no key and no network.
+    anchor has landed (usually within a minute of creation), and the Bitcoin
+    record for the few proofs anchored there before 2026-10-15. For checking
+    somebody else's proof, use verify_file with their bundle instead; that
+    needs no key and no network.
     """
     try:
         p = get_proof(proof_id)
@@ -348,9 +362,15 @@ def get_proof_status(proof_id: int) -> str:
         f"Proof {p.get('id')}  ({p.get('filename') or 'no filename'})",
         f"  SHA-256        : {p.get('sha256')}",
         f"  Polygon        : {p.get('polygon_status')}" + (f"  tx {p.get('chain_tx')}" if p.get("chain_tx") else ""),
-        f"  Bitcoin        : {p.get('bitcoin_status')}" + (f"  tx {p.get('bitcoin_txid')}" if p.get("bitcoin_txid") else ""),
+    ]
+    if p.get("bitcoin_txid"):
+        lines.append(
+            f"  Bitcoin        : {p.get('bitcoin_status')}  tx {p.get('bitcoin_txid')}"
+            "  (anchored on Bitcoin before 15 October 2026)"
+        )
+    lines += [
         f"  Created        : {p.get('created_at')}",
-        f"  Certificate    : {DEFAULT_BASE_URL}{p.get('certificate_url', '')}",
+        f"  Certificate    : {_absolute_url(p.get('certificate_url'))}",
     ]
     if p.get("issued_via"):
         lines.append(f"  Recorded through {p['issued_via']} \u00b7 Anchored by ProofLedger")

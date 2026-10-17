@@ -1,7 +1,7 @@
 {
   "name": "proofledger",
-  "version": "0.1.0",
-  "description": "Anchor a file's SHA-256 hash on Polygon through the ProofLedger API, save its proof bundle, and verify files against bundles offline. Only the hash leaves your machine.",
+  "version": "0.1.1",
+  "description": "Anchor a file's SHA-256 hash on Polygon through the ProofLedger API, save its proof bundle, and verify files against bundles offline. Only the hash leaves your machine, plus the file name unless you ask Claude not to send it.",
   "author": {
     "name": "ProofLedger",
     "url": "https://proofledger.io"

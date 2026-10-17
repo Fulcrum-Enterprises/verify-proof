@@ -4,9 +4,11 @@
 A free, open-source CLI tool for verifying cryptographic proofs of existence
 created by blockchain timestamp services like ProofLedger.
 
-Supports verification of:
-- SHA-256 file hashes against Polygon and Bitcoin blockchain anchors
-- Merkle paths, for proofs anchored in a batch
+Supports:
+- SHA-256 file hashes checked against a proof bundle that names a Polygon or
+  Bitcoin transaction (look the transaction up on a block explorer to confirm it)
+- Merkle paths, for proofs anchored in a batch: the root is computed and printed
+  for comparison with the root recorded in the transaction
 - JSON proof files carrying hash, blockchain, tx_id and merkle_path (ProofLedger bundles; binary OpenTimestamps .ots files are a different format and are not parsed here, use the ots tool)
 
 Usage:
@@ -60,13 +62,27 @@ def hash_file(filepath: str, algorithm: str = "sha256") -> str:
     return h.hexdigest()
 
 
+def explorer_url(blockchain: str, tx_id: str) -> str:
+    """Public block-explorer link for a transaction, where one is known."""
+    b = (blockchain or "").lower()
+    if tx_id and b in ("polygon", "matic"):
+        return f"https://polygonscan.com/tx/{tx_id}"
+    return ""
+
+
 def verify_proof(file_hash: str, proof: dict) -> dict:
     """Verify a blockchain timestamp proof against a file hash.
 
     Checks that:
     1. The proof's recorded hash matches the file's current hash
-    2. The Merkle path is valid (if present)
-    3. The blockchain anchor reference is present
+    2. The bundle names a blockchain transaction
+
+    If the proof carries a Merkle path, the Merkle root is computed from it and
+    returned (`merkle_root`) so it can be compared with the root recorded in the
+    transaction. Nothing here reads the chain: the transaction id and anchor
+    time are what the bundle says until someone looks the transaction up on a
+    block explorer. `merkle_verified` is kept for compatibility and means only
+    that a root was computed.
 
     Returns a result dict with verification status and details.
     """
@@ -83,10 +99,14 @@ def verify_proof(file_hash: str, proof: dict) -> dict:
 
     # Step 1: Hash match
     if file_hash.lower() != result["proof_hash"].lower():
-        result["error"] = "Hash mismatch — file has been modified since timestamping"
+        result["error"] = (
+            "Hash mismatch: this is not the file the proof was made for "
+            "(it was changed, or it is a different file)"
+        )
         return result
 
-    # Step 2: Merkle path verification (if proof contains merkle_path)
+    # Merkle path (if the proof carries one): compute the root. Nothing here can
+    # compare it with the chain; the message tells the reader to do that.
     merkle_path = proof.get("merkle_path", [])
     if merkle_path:
         current = file_hash
@@ -101,14 +121,29 @@ def verify_proof(file_hash: str, proof: dict) -> dict:
         result["merkle_root"] = current
         result["merkle_verified"] = True
 
-    # Step 3: Blockchain anchor reference
+    # Step 2: the bundle names a transaction. Reported as the bundle's claim,
+    # because this offline check never reads the chain.
     if result["tx_id"]:
         result["verified"] = True
-        result["message"] = (
-            f"Proof verified. File hash matches blockchain anchor on {result['blockchain']}. "
-            f"Transaction: {result['tx_id']}. "
-            f"Anchored at: {result['anchored_at']}."
+        when = f" at {result['anchored_at']}" if result["anchored_at"] else ""
+        message = (
+            "File matches the proof bundle. "
+            f"The bundle says it was anchored on {result['blockchain']}{when} "
+            f"in transaction {result['tx_id']}."
         )
+        if "merkle_root" in result:
+            message += (
+                f" Merkle root computed from the path: {result['merkle_root']}. "
+                "Compare it with the root recorded in the transaction."
+            )
+        message += " Look that transaction up on a block explorer to confirm it"
+        link = explorer_url(result["blockchain"], result["tx_id"])
+        if link:
+            result["explorer_url"] = link
+            message += f": {link}"
+        else:
+            message += "."
+        result["message"] = message
     else:
         result["error"] = "No blockchain transaction ID in proof — cannot verify anchor"
 
@@ -147,7 +182,7 @@ def _hint() -> None:
             return
     except Exception:  # pragma: no cover - exotic stdout
         return
-    print(f"\n(proofs like this are made with ProofLedger: {HOME_URL})", file=sys.stderr)
+    print(f"\n(make proofs like this with ProofLedger: {HOME_URL})", file=sys.stderr)
 
 
 def main():
