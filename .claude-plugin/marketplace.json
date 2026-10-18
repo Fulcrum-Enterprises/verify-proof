@@ -10,6 +10,7 @@
   "plugins": [
     {
       "name": "proofledger",
+      "displayName": "ProofLedger",
       "source": "./claude-plugin",
       "description": "Anchor a file's SHA-256 on Polygon through the ProofLedger API, save its proof bundle, and verify files against bundles offline."
     }

@@ -1,6 +1,7 @@
 {
   "name": "proofledger",
-  "version": "0.1.2",
+  "displayName": "ProofLedger",
+  "version": "0.1.3",
   "description": "Anchor a file's SHA-256 hash on Polygon through the ProofLedger API, save its proof bundle, and verify files against bundles offline. Only the hash leaves your machine, plus the file name unless you ask Claude not to send it.",
   "author": {
     "name": "ProofLedger",
@@ -17,5 +18,9 @@
     "sha256",
     "verify",
     "mcp"
-  ]
+  ],
+  "documentationUrl": "https://github.com/Fulcrum-Enterprises/verify-proof/tree/main/claude-plugin",
+  "supportUrl": "https://proofledger.io/support.html",
+  "privacyPolicyUrl": "https://proofledger.io/privacy.html",
+  "termsOfServiceUrl": "https://proofledger.io/terms.html"
 }
