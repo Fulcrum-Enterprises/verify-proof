@@ -17,9 +17,5 @@
     "sha256",
     "verify",
     "mcp"
-  ],
-  "documentationUrl": "https://github.com/Fulcrum-Enterprises/verify-proof/tree/main/claude-plugin",
-  "supportUrl": "https://proofledger.io/support.html",
-  "privacyPolicyUrl": "https://proofledger.io/privacy.html",
-  "termsOfServiceUrl": "https://proofledger.io/terms.html"
+  ]
 }
