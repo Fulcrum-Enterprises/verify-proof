@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "verify-proof"
-version = "0.3.4"
-description = "Verify blockchain-anchored timestamp proofs offline, and create them through the ProofLedger API — CLI + MCP server"
+version = "0.4.0"
+description = "Verify blockchain-anchored timestamp proofs offline, create them through the ProofLedger API, and keep agent run receipts — CLI + MCP server"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
@@ -15,6 +15,7 @@ authors = [
 keywords = [
     "blockchain", "timestamp", "timestamping", "verification",
     "proof-of-existence", "sha256", "polygon", "proofledger", "api",
+    "ai-agents", "audit-trail", "receipts",
 ]
 classifiers = [
     # Beta rather than Alpha as of 0.2.3: the CLI surface has been stable
@@ -61,4 +62,4 @@ Changelog = "https://github.com/Fulcrum-Enterprises/verify-proof/releases"
 ProofLedger = "https://proofledger.io"
 
 [tool.setuptools]
-py-modules = ["verify_proof", "verify_proof_mcp", "proofledger_api"]
+py-modules = ["verify_proof", "verify_proof_mcp", "proofledger_api", "agent_receipt"]

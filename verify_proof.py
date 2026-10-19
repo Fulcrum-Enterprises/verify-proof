@@ -16,10 +16,14 @@ Usage:
     python verify_proof.py hash <file>
     python verify_proof.py verify <file> --proof <proof.json>
     python verify_proof.py create <file> [--no-filename]
+    python verify_proof.py receipt verify <receipt.json> [--step N --content <file>]
+    python verify_proof.py receipt show <receipt.json>
+    python verify_proof.py receipt anchor <receipt.json>
 
-`hash` and `verify` never touch the network. `create` is the one exception:
-it submits the hash (never the file) to ProofLedger to be anchored, and needs
-a free API key.
+`hash`, `verify`, `receipt verify` and `receipt show` never touch the network.
+`create` and `receipt anchor` are the exceptions: they submit a hash (never the
+file, never a step's content) to ProofLedger to be anchored, and need a free
+API key. Agent run receipts are built with the `agent_receipt` module.
 
 How blockchain timestamp verification works:
     1. A file's SHA-256 hash is computed locally (never uploaded)
@@ -197,6 +201,7 @@ def main():
             "  verify-proof hash document.pdf\n"
             "  verify-proof verify document.pdf --proof proof.json\n"
             "  verify-proof create document.pdf   (needs a free API key)\n"
+            "  verify-proof receipt verify run.receipt.json   (an agent run receipt, offline)\n"
             "\n"
             "Learn more:\n"
             "  ProofLedger: https://proofledger.io"
@@ -243,11 +248,37 @@ def main():
         help=f"API base URL (default: {DEFAULT_BASE_URL})",
     )
 
+    # receipt subcommands: agent run receipts (format proofledger-agent-run-receipt/1)
+    receipt_parser = subparsers.add_parser(
+        "receipt",
+        help="Agent run receipts: verify (offline), show, or anchor one",
+    )
+    receipt_sub = receipt_parser.add_subparsers(dest="receipt_command")
+    rv = receipt_sub.add_parser("verify", help="Recompute the chain and check it against the bundle, offline")
+    rv.add_argument("receipt", help="Path to the receipt JSON file")
+    rv.add_argument("--step", type=int, help="Also check that step N was made from --content")
+    rv.add_argument("--content", help="File holding the content of step --step")
+    rv.add_argument("--secret", help="The run secret, if it was redacted from the receipt")
+    rs = receipt_sub.add_parser("show", help="List the receipt's steps (labels and fingerprints, never content)")
+    rs.add_argument("receipt", help="Path to the receipt JSON file")
+    ra = receipt_sub.add_parser("anchor", help="Anchor a saved receipt's chain head on ProofLedger (one API proof)")
+    ra.add_argument("receipt", help="Path to the receipt JSON file (rewritten with the bundle)")
+    ra.add_argument("--wait", type=int, default=120, help="Seconds to wait for the Polygon anchor (default 120; 0 = do not wait)")
+    ra.add_argument("--api-key", help=f"ProofLedger API key (default: ${API_KEY_ENV})")
+    ra.add_argument("--base-url", default=DEFAULT_BASE_URL, help=f"API base URL (default: {DEFAULT_BASE_URL})")
+
     args = parser.parse_args()
 
     if not args.command:
         parser.print_help()
         sys.exit(1)
+
+    if args.command == "receipt":
+        if not args.receipt_command:
+            receipt_parser.print_help()
+            sys.exit(1)
+        _receipt_command(args)
+        return
 
     if args.command == "hash":
         if not Path(args.file).exists():
@@ -301,6 +332,73 @@ def main():
             print(str(exc), file=sys.stderr)
             sys.exit(1)
         print(summarize(proof, base_url=args.base_url))
+
+
+def _receipt_command(args) -> None:
+    """`verify-proof receipt ...`. Imported here, not at module level: agent_receipt
+    imports this module's verify_proof() for the bundle check."""
+    import agent_receipt
+
+    if not Path(args.receipt).exists():
+        print(f"Error: Receipt file not found: {args.receipt}", file=sys.stderr)
+        sys.exit(1)
+    with open(args.receipt, encoding="utf-8") as f:
+        receipt = json.load(f)
+
+    if args.receipt_command == "show":
+        print(agent_receipt.describe(receipt))
+        return
+
+    if args.receipt_command == "verify":
+        result = agent_receipt.verify_receipt(receipt)
+        if result["verified"]:
+            print(f"VERIFIED: {result['message']}")
+        else:
+            print(f"FAILED: {result.get('error', 'Unknown error')}")
+        if args.step is not None or args.content:
+            if args.step is None or not args.content:
+                print("Error: --step and --content go together", file=sys.stderr)
+                sys.exit(2)
+            if not Path(args.content).exists():
+                print(f"Error: Content file not found: {args.content}", file=sys.stderr)
+                sys.exit(1)
+            with open(args.content, "rb") as f:
+                content = f.read()
+            step = agent_receipt.verify_step(receipt, args.step, content, secret=args.secret)
+            print(("STEP OK: " + step["message"]) if step["verified"] else ("STEP FAILED: " + step["error"]))
+            if not step["verified"]:
+                sys.exit(1)
+        if result["verified"]:
+            _hint()
+            sys.exit(0)
+        sys.exit(1)
+
+    if args.receipt_command == "anchor":
+        try:
+            r = agent_receipt.RunReceipt.from_dict(receipt)
+        except ValueError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            sys.exit(1)
+        if r.proof:
+            print("This receipt is already anchored and carries its bundle.")
+            return
+        try:
+            if r.proof_id is None:
+                r.anchor(key=args.api_key, base_url=args.base_url, wait=args.wait)
+            else:
+                r.attach_bundle(key=args.api_key, base_url=args.base_url)
+        except ProofLedgerError as exc:
+            print(str(exc), file=sys.stderr)
+            r.save(args.receipt)
+            sys.exit(1)
+        r.save(args.receipt)
+        if r.proof:
+            print(f"Anchored: proof {r.proof_id}, {r.proof.get('blockchain')} transaction {r.proof.get('tx_id')} at {r.proof.get('anchored_at')}.")
+            print(f"Bundle saved into {args.receipt}. Check it offline:  verify-proof receipt verify {args.receipt}")
+        else:
+            print(f"Submitted: proof {r.proof_id}. The Polygon anchor usually lands within a minute; run this again to save the bundle.")
+        if r.certificate_url:
+            print(f"Certificate: {r.certificate_url}")
 
 
 if __name__ == "__main__":

@@ -111,6 +111,33 @@ app.post("/hooks/proofledger", express.raw({ type: "application/json" }), (req, 
 
 `pl.listWebhooks()`, `pl.deleteWebhook(id)`, `pl.testWebhook(id)` and `pl.getBranding()` cover webhooks and branding. The public `GET /api/v1/verify?hash=` lookup has no client method; offline verification does not need it.
 
+## Agent run receipts
+
+Prove what an AI agent did, without storing what it saw. A receipt is a hash chain over the steps of one run: each step keeps only a SHA-256 fingerprint of its content (salted with a per-run secret), its type, its time and an optional short label. The chain head is anchored on ProofLedger as one ordinary proof and the bundle is saved into the receipt, so anyone holding it can recompute the chain and check the head offline. Same format and rule as the Python package (`proofledger-agent-run-receipt/1`), so either port verifies the other's receipts.
+
+```js
+import { RunReceipt, verifyReceipt, verifyStep, ProofLedger } from "verify-proof";
+
+const r = new RunReceipt("support-ticket-48213", { agent: { name: "support-bot" } });
+r.prompt(customerMessage, { label: "customer message" });
+r.toolCall(JSON.stringify(call), { label: "lookup_order" });
+r.toolResult(resultText);
+r.output(reply, { label: "reply sent" });
+await r.anchor(new ProofLedger({ apiKey: process.env.PROOFLEDGER_API_KEY }));  // one API proof; waits for the anchor
+r.save("ticket-48213.receipt.json");
+
+verifyReceipt(JSON.parse(readFileSync("ticket-48213.receipt.json", "utf8"))).verified;   // offline
+verifyStep(receipt, 0, customerMessage).verified;                                           // needs the secret
+```
+
+```bash
+verify-proof receipt verify ticket-48213.receipt.json [--step 0 --content customer-message.txt]
+verify-proof receipt show ticket-48213.receipt.json
+verify-proof receipt anchor ticket-48213.receipt.json      # needs PROOFLEDGER_API_KEY
+```
+
+Remove `secret` from the file before handing a receipt to a third party (`r.toObject({ includeSecret: false })`): the chain still verifies, and nothing in it can be guessed. A receipt shows that this exact sequence of steps existed by the anchor time and has not changed since; it does not show that the agent was right, or who ran it.
+
 ## What verification checks
 
 1. The file's SHA-256, computed locally, matches the proof's recorded hash

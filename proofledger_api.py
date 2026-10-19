@@ -78,6 +78,7 @@ def submit_proof(
     key: str | None = None,
     base_url: str = DEFAULT_BASE_URL,
     timeout: int = 30,
+    external_id: str | None = None,
 ) -> dict:
     """Submit a SHA-256 digest for anchoring. Returns the created proof.
 
@@ -90,6 +91,8 @@ def submit_proof(
                  existing callers do not break, with a DeprecationWarning.
         key: API key; falls back to the environment.
         base_url: Override for staging or a private deployment.
+        external_id: Your own record id (up to 128 characters). Sending the
+                  same one again returns the existing proof instead of a new one.
     """
     digest = sha256.strip().lower()
     if len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
@@ -98,6 +101,8 @@ def submit_proof(
     payload: dict = {"sha256": digest}
     if filename:
         payload["filename"] = filename[:500]
+    if external_id is not None and str(external_id) != "":
+        payload["external_id"] = str(external_id)[:128]
     if bitcoin:
         warnings.warn(
             "bitcoin=True is ignored: ProofLedger stopped anchoring on Bitcoin on "

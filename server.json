@@ -2,20 +2,20 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.csolomon0704-prog/verify-proof",
   "title": "verify-proof",
-  "description": "Verify blockchain timestamp proofs offline, or anchor a new one through ProofLedger.",
+  "description": "Verify blockchain timestamp proofs offline, anchor new ones through ProofLedger, and keep agent run receipts (a hash chain over an agent's steps, anchored as one proof).",
   "websiteUrl": "https://proofledger.io",
   "repository": {
     "url": "https://github.com/Fulcrum-Enterprises/verify-proof",
     "source": "github",
     "id": "R_kgDOSA-RCg"
   },
-  "version": "0.3.4",
+  "version": "0.4.0",
   "packages": [
     {
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "verify-proof",
-      "version": "0.3.4",
+      "version": "0.4.0",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"

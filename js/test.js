@@ -11,6 +11,7 @@ import { createServer } from "node:http";
 import { createHash, createHmac } from "node:crypto";
 import {
   hashFile, verifyProof, loadProof, verifyWebhookSignature, ProofLedger, ProofLedgerError,
+  RunReceipt, verifyReceipt, verifyStep, describeReceipt, computeChainHead, stepFingerprint, chainStart,
 } from "./verify-proof.js";
 
 let passed = 0;
@@ -203,6 +204,84 @@ await test("errors carry the status, body and Retry-After", async () => {
   await assert.rejects(() => pl.getProof(429), (e) => e instanceof ProofLedgerError && e.status === 429 && e.retryAfter === 12 && e.body.error === "Rate limit exceeded");
   const bad = new ProofLedger({ apiKey: "sk_wrong", baseUrl });
   await assert.rejects(() => bad.getProof(7), (e) => e.status === 401 && /HTTP 401/.test(e.message));
+});
+
+// ---- agent run receipts -------------------------------------------------------
+
+const SECRET = "ab".repeat(32);
+const RECEIPT_TX = "0x" + "cd".repeat(32);
+const bundleFor = (head) => ({ hash: head, algorithm: "sha256", blockchain: "polygon", tx_id: RECEIPT_TX, anchored_at: "2026-10-19T12:00:00.000Z", merkle_path: [], service: "proofledger" });
+
+await test("receipt chain rule is plain SHA-256 and matches the Python port's fixture", async () => {
+  assert.equal(stepFingerprint(SECRET, "hello"), createHash("sha256").update(Buffer.concat([Buffer.from(SECRET, "hex"), Buffer.from("hello")])).digest("hex"));
+  assert.equal(chainStart(SECRET), createHash("sha256").update(Buffer.from(SECRET, "hex")).digest("hex"));
+  const p = new URL("../examples/receipt.json", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
+  const fixture = loadProof(p);
+  assert.equal(fixture.chain_head, "1e1cf8cb304891749efcaab20ca0d477a8c2ebe19e531061fef4a6a7d120ac97");
+  assert.equal(computeChainHead(fixture.chain_start, fixture.steps), fixture.chain_head);
+  const res = verifyReceipt(fixture);
+  assert.equal(res.verified, true);
+  assert.equal(res.steps, 4);
+  assert.match(res.message, /^Receipt for run example-run-1: 4 steps chain to head 1e1cf8cb30489174…, and File matches the proof bundle/);
+  assert.equal(verifyStep(fixture, 0, "What is the capital of France?").verified, true);
+  assert.equal(verifyStep(fixture, 2, "Lyon").verified, false);
+  assert.ok(!JSON.stringify(fixture).includes("Paris"));
+});
+
+await test("RunReceipt builds, round-trips and detects tampering", async () => {
+  const r = new RunReceipt("run-1", { agent: { name: "bot" }, secret: SECRET, startedAt: "2026-10-19T12:00:00Z" });
+  r.prompt("what is 2+2", { label: "question" });
+  r.toolCall(JSON.stringify({ tool: "calc" }), { label: "calc" });
+  r.toolResult(Buffer.from("4"));
+  r.output("4", { label: "answer" });
+  assert.throws(() => r.addStep("thought", "x"));
+  assert.throws(() => r.note("x", { label: "y".repeat(121) }));
+  const d = r.toObject();
+  assert.deepEqual(d.steps.map((s) => s.index), [0, 1, 2, 3]);
+  assert.ok(!JSON.stringify(d).includes("what is 2+2"));
+  const again = RunReceipt.fromObject(d);
+  assert.equal(again.head, r.head);
+  d.proof = bundleFor(d.chain_head);
+  assert.equal(verifyReceipt(d).verified, true);
+  const relabelled = JSON.parse(JSON.stringify(d)); relabelled.steps[3].label = "edited";
+  assert.equal(verifyReceipt(relabelled).chain_ok, false);
+  const dropped = JSON.parse(JSON.stringify(d)); dropped.steps.splice(1, 1);
+  assert.match(verifyReceipt(dropped).error, /out of order/);
+  const wrong = JSON.parse(JSON.stringify(d)); wrong.proof.hash = "ef".repeat(32);
+  assert.match(verifyReceipt(wrong).error, /Bundle does not match/);
+  const redacted = r.toObject({ includeSecret: false }); redacted.proof = bundleFor(redacted.chain_head);
+  assert.equal(verifyReceipt(redacted).verified, true);
+  assert.equal(verifyStep(redacted, 0, "what is 2+2").verified, false);
+  assert.equal(verifyStep(redacted, 0, "what is 2+2", SECRET).verified, true);
+  assert.throws(() => RunReceipt.fromObject(redacted));
+  assert.ok(describeReceipt(redacted).includes("redacted") && !describeReceipt(redacted).includes("what is"));
+});
+
+await test("RunReceipt.anchor sends only the head and attaches the bundle", async () => {
+  let posted = null, polls = 0, head = null;
+  const fakeFetch = async (url, init) => {
+    const path = new URL(url).pathname;
+    const json = (status, obj) => new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json" } });
+    if (init.method === "POST" && path === "/api/v1/proof") {
+      posted = JSON.parse(init.body); head = posted.sha256;
+      return json(201, { id: 9, sha256: head, polygon_status: "PENDING", certificate_url: "/cert/9", verification_url: "/verify.html?hash=" + head });
+    }
+    if (path === "/api/v1/proof/9") { polls++; return json(200, { id: 9, polygon_status: polls >= 2 ? "ANCHORED" : "PENDING" }); }
+    if (path === "/api/v1/proof/9/bundle") return json(200, bundleFor(head));
+    return json(404, { error: "no" });
+  };
+  const client = new ProofLedger({ apiKey: "sk_test", baseUrl: "http://fake.local", fetch: fakeFetch });
+  const r = new RunReceipt("ticket-9", { secret: SECRET });
+  r.prompt("secret customer text", { label: "customer message" });
+  r.output("the reply");
+  const proof = await r.anchor(client, { wait: 10, poll: 1 });
+  assert.equal(proof.id, 9);
+  assert.deepEqual(posted, { sha256: r.head, filename: "agent run ticket-9", external_id: "ticket-9" });
+  assert.equal(r.proofId, 9);
+  assert.equal(r.proof.tx_id, RECEIPT_TX);
+  assert.equal(r.certificateUrl, "http://fake.local/cert/9");
+  assert.equal(verifyReceipt(r.toObject()).verified, true);
+  assert.throws(() => r.output("too late"));
 });
 
 fake.close();

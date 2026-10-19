@@ -1,0 +1,55 @@
+{
+  "format": "proofledger-agent-run-receipt/1",
+  "run_id": "example-run-1",
+  "started_at": "2026-10-19T12:00:00Z",
+  "finished_at": "2026-10-19T12:00:05Z",
+  "agent": {
+    "name": "example-agent",
+    "model": "example-model"
+  },
+  "secret": "abababababababababababababababababababababababababababababababab",
+  "chain_start": "9a2db2e23f1504cd056606553ac049c5e718e8f9ce9233876df1a7a1821af885",
+  "steps": [
+    {
+      "index": 0,
+      "type": "prompt",
+      "at": "2026-10-19T12:00:01Z",
+      "fingerprint": "49e0deef10bb2ce0d65aaa73389047c66a17e2ea5e6db15cd1e7ce0cfdec87d6",
+      "label": "user question"
+    },
+    {
+      "index": 1,
+      "type": "tool_call",
+      "at": "2026-10-19T12:00:02Z",
+      "fingerprint": "26ffed8ef02f72264b15890d24580ee492baf443391695a5317e022283fab440",
+      "label": "lookup"
+    },
+    {
+      "index": 2,
+      "type": "tool_result",
+      "at": "2026-10-19T12:00:03Z",
+      "fingerprint": "7b5534928fd86b7996c4cefa625f1bd604e2095e407f8705406fc9f5065c1948"
+    },
+    {
+      "index": 3,
+      "type": "output",
+      "at": "2026-10-19T12:00:04Z",
+      "fingerprint": "0583eef79ad7a949c8a9ca8912ca53e7cab62ecba76a83275c0fd70307a1080b",
+      "label": "answer"
+    }
+  ],
+  "chain_head": "1e1cf8cb304891749efcaab20ca0d477a8c2ebe19e531061fef4a6a7d120ac97",
+  "proof": {
+    "hash": "1e1cf8cb304891749efcaab20ca0d477a8c2ebe19e531061fef4a6a7d120ac97",
+    "algorithm": "sha256",
+    "blockchain": "polygon",
+    "tx_id": "0x9f2cabababababababababababababababababababababababababababababab",
+    "anchored_at": "2026-10-19T12:01:00Z",
+    "merkle_path": [],
+    "service": "proofledger",
+    "proof_id": 123
+  },
+  "proof_id": 123,
+  "certificate_url": "https://proofledger.io/cert/123",
+  "verification_url": "https://proofledger.io/verify.html?hash=1e1cf8cb304891749efcaab20ca0d477a8c2ebe19e531061fef4a6a7d120ac97"
+}

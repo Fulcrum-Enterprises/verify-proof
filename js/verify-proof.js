@@ -32,16 +32,26 @@
  * OpenTimestamps `.ots` files are a different format and are not parsed here;
  * use the `ots` tool for those.
  *
+ * Agent run receipts (format proofledger-agent-run-receipt/1): a hash chain
+ * over the steps of an agent's work, anchored as one proof, so what the agent
+ * did can be proven later without storing what it saw. Same rule as the
+ * Python package's agent_receipt module, so either port verifies the other's
+ * receipts. See RunReceipt, verifyReceipt and verifyStep below.
+ *
  * CLI:
  *   verify-proof hash <file>
  *   verify-proof verify <file> --proof <proof.json>
+ *   verify-proof receipt verify <receipt.json> [--step N --content <file> --secret <hex>]
+ *   verify-proof receipt show <receipt.json>
+ *   verify-proof receipt anchor <receipt.json> [--wait 120]     (needs PROOFLEDGER_API_KEY)
  *
  * Library:
- *   import { hashFile, verifyProof, loadProof, ProofLedger, verifyWebhookSignature } from "verify-proof";
+ *   import { hashFile, verifyProof, loadProof, ProofLedger, verifyWebhookSignature,
+ *            RunReceipt, verifyReceipt, verifyStep } from "verify-proof";
  */
 
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
-import { createReadStream, readFileSync, existsSync } from "node:fs";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { createReadStream, readFileSync, writeFileSync, existsSync } from "node:fs";
 
 /**
  * Compute the cryptographic hash of a file, streaming so large files
@@ -423,14 +433,332 @@ Examples:
 Creating proofs and webhooks: see the ProofLedger client in the library
 (import { ProofLedger } from "verify-proof") and https://proofledger.io/platforms
 
+Agent run receipts (offline unless noted):
+  verify-proof receipt verify run.receipt.json [--step N --content file]
+  verify-proof receipt show run.receipt.json
+  verify-proof receipt anchor run.receipt.json      (needs PROOFLEDGER_API_KEY)
+
 Learn more:
   ProofLedger: https://proofledger.io`;
+
+// ---------------------------------------------------------------------------
+// Agent run receipts
+//
+// chain_start = SHA-256(secret bytes)
+// link_i      = SHA-256(utf8(prev + "\n" + index + "\n" + type + "\n" + at + "\n" + fingerprint + "\n" + label))
+// chain_head  = the last link (chain_start with no steps)
+// fingerprint = SHA-256(secret bytes + content bytes)
+//
+// Only the fingerprints, types, times and optional short labels are written to
+// the receipt; content never is. Remove `secret` before sharing a receipt and
+// the chain still verifies, but nothing in it can be guessed.
+// ---------------------------------------------------------------------------
+
+export const RECEIPT_FORMAT = "proofledger-agent-run-receipt/1";
+export const STEP_TYPES = ["prompt", "tool_call", "tool_result", "output", "note"];
+const LABEL_MAX = 120;
+
+function sha256Hex(buf) {
+  return createHash("sha256").update(buf).digest("hex");
+}
+function contentBytes(content) {
+  if (Buffer.isBuffer(content)) return content;
+  if (content instanceof Uint8Array) return Buffer.from(content);
+  return Buffer.from(String(content), "utf8");
+}
+function nowIso() {
+  return new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+function requireSecret(secret) {
+  if (!HEX64.test(String(secret ?? ""))) throw new Error("secret must be 64 hex characters (32 random bytes)");
+  return secret;
+}
+
+/** SHA-256 over the run secret and a step's content. Pure computation. */
+export function stepFingerprint(secret, content) {
+  return sha256Hex(Buffer.concat([Buffer.from(requireSecret(secret), "hex"), contentBytes(content)]));
+}
+export function chainStart(secret) {
+  return sha256Hex(Buffer.from(requireSecret(secret), "hex"));
+}
+export function chainLink(prev, index, type, at, fingerprint, label = "") {
+  return sha256Hex(Buffer.from(`${prev}\n${index}\n${type}\n${at}\n${fingerprint}\n${label}`, "utf8"));
+}
+/** Recompute the chain head from chain_start and the steps as written. */
+export function computeChainHead(start, steps) {
+  let current = start;
+  for (const s of steps) current = chainLink(current, Number(s.index), String(s.type), String(s.at ?? ""), String(s.fingerprint), String(s.label ?? ""));
+  return current;
+}
+
+/**
+ * Build a receipt step by step, then anchor its chain head.
+ *
+ *   const r = new RunReceipt("support-ticket-48213", { agent: { name: "support-bot" } });
+ *   r.prompt(customerMessage, { label: "customer message" });
+ *   r.toolCall(JSON.stringify(call), { label: "lookup_order" });
+ *   r.toolResult(resultText);
+ *   r.output(reply, { label: "reply sent" });
+ *   await r.anchor(new ProofLedger({ apiKey }));   // one API proof; waits for the anchor
+ *   r.save("run-48213.receipt.json");
+ */
+export class RunReceipt {
+  constructor(runId, { agent, secret, startedAt } = {}) {
+    runId = String(runId ?? "").trim();
+    if (!runId || runId.length > 128) throw new Error("runId must be 1 to 128 characters");
+    this.runId = runId;
+    this.agent = agent ? { ...agent } : null;
+    this.secret = requireSecret(secret ?? randomBytes(32).toString("hex"));
+    this.startedAt = startedAt ?? nowIso();
+    this.finishedAt = null;
+    this.steps = [];
+    this.proof = null;
+    this.proofId = null;
+    this.certificateUrl = null;
+    this.verificationUrl = null;
+  }
+
+  addStep(type, content, { label, at } = {}) {
+    if (this.proof !== null || this.proofId !== null) throw new Error("this receipt is anchored; start a new run for more steps");
+    if (!STEP_TYPES.includes(type)) throw new Error(`step type must be one of ${STEP_TYPES.join(", ")}`);
+    if (label !== undefined && label !== null) {
+      label = String(label).trim();
+      if (label.length > LABEL_MAX) throw new Error(`label is over ${LABEL_MAX} characters; labels are kept in the receipt, so keep them short and non-sensitive`);
+      if (label.includes("\n")) throw new Error("label must be one line");
+    }
+    const step = { index: this.steps.length, type, at: at ?? nowIso(), fingerprint: stepFingerprint(this.secret, content) };
+    if (label) step.label = label;
+    this.steps.push(step);
+    return step;
+  }
+  prompt(content, opts) { return this.addStep("prompt", content, opts); }
+  toolCall(content, opts) { return this.addStep("tool_call", content, opts); }
+  toolResult(content, opts) { return this.addStep("tool_result", content, opts); }
+  output(content, opts) { return this.addStep("output", content, opts); }
+  note(content, opts) { return this.addStep("note", content, opts); }
+
+  get chainStart() { return chainStart(this.secret); }
+  get head() { return computeChainHead(this.chainStart, this.steps); }
+  finish(at) { if (this.finishedAt === null) this.finishedAt = at ?? nowIso(); }
+
+  /**
+   * Anchor the chain head on ProofLedger: one API proof. Sends only the head,
+   * the label "agent run <runId>" and the run id as external_id. Waits up to
+   * `wait` seconds for the Polygon anchor, then stores the bundle; with
+   * wait 0 it returns at once and attachBundle() finishes the job later.
+   * @param {ProofLedger} client
+   */
+  async anchor(client, { wait = 120, poll = 5 } = {}) {
+    if (this.steps.length === 0) throw new Error("a receipt needs at least one step before it is anchored");
+    this.finish();
+    const proof = await client.createProof({ sha256: this.head, filename: `agent run ${this.runId}`, externalId: this.runId });
+    this.proofId = Number(proof.id);
+    this.certificateUrl = absolute(proof.certificate_url, client.baseUrl);
+    this.verificationUrl = absolute(proof.verification_url, client.baseUrl);
+    const deadline = Date.now() + Math.max(0, wait) * 1000;
+    let status = String(proof.polygon_status ?? "").toUpperCase();
+    while (status !== "ANCHORED") {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) break;
+      await new Promise((r) => setTimeout(r, Math.min(Math.max(1, poll) * 1000, remaining)));
+      status = String((await client.getProof(this.proofId)).polygon_status ?? "").toUpperCase();
+    }
+    if (status === "ANCHORED") await this.attachBundle(client);
+    return proof;
+  }
+
+  /** Fetch the proof bundle for an anchored receipt and keep it inside. */
+  async attachBundle(client) {
+    if (this.proofId === null) throw new Error("anchor() first");
+    const bundle = await client.getBundle(this.proofId);
+    if (!bundle.tx_id) throw new ProofLedgerError("The anchor has not landed yet; try attachBundle() again in a minute.", 0);
+    this.proof = bundle;
+    return bundle;
+  }
+
+  toObject({ includeSecret = true } = {}) {
+    const out = { format: RECEIPT_FORMAT, run_id: this.runId, started_at: this.startedAt, finished_at: this.finishedAt };
+    if (this.agent) out.agent = this.agent;
+    if (includeSecret) out.secret = this.secret;
+    out.chain_start = this.chainStart;
+    out.steps = this.steps.map((s) => ({ ...s }));
+    out.chain_head = this.head;
+    if (this.proofId !== null) {
+      out.proof_id = this.proofId;
+      out.certificate_url = this.certificateUrl;
+      out.verification_url = this.verificationUrl;
+    }
+    out.proof = this.proof;
+    return out;
+  }
+  save(path, opts) { writeFileSync(path, JSON.stringify(this.toObject(opts), null, 2) + "\n"); }
+
+  static fromObject(data) {
+    if (!data || data.format !== RECEIPT_FORMAT) throw new Error(`not a ${RECEIPT_FORMAT} receipt`);
+    if (!data.secret) throw new Error("this receipt has no secret, so steps cannot be added or checked against content; verifyReceipt() still works");
+    const r = new RunReceipt(data.run_id, { agent: data.agent, secret: data.secret, startedAt: data.started_at });
+    r.finishedAt = data.finished_at ?? null;
+    r.steps = (data.steps ?? []).map((s) => ({ ...s }));
+    r.proofId = data.proof_id ?? null;
+    r.certificateUrl = data.certificate_url ?? null;
+    r.verificationUrl = data.verification_url ?? null;
+    r.proof = data.proof ?? null;
+    if (r.chainStart !== data.chain_start) throw new Error("chain_start does not match the secret");
+    if (r.head !== data.chain_head) throw new Error("chain_head does not match the steps");
+    return r;
+  }
+  static load(path) { return RunReceipt.fromObject(JSON.parse(readFileSync(path, "utf8"))); }
+}
+
+function absolute(url, baseUrl) {
+  if (!url) return null;
+  return String(url).startsWith("/") ? `${String(baseUrl).replace(/\/+$/, "")}${url}` : String(url);
+}
+
+/**
+ * Check a receipt without ProofLedger: structure, chain, then the bundle.
+ * `verified` is true only when the chain recomputes AND the bundle names a
+ * transaction for that head. Mirrors agent_receipt.verify_receipt in Python.
+ */
+export function verifyReceipt(receipt) {
+  const result = { verified: false, chain_ok: false, anchored: false, steps: 0 };
+  if (!receipt || typeof receipt !== "object" || receipt.format !== RECEIPT_FORMAT) {
+    result.error = `Not a ${RECEIPT_FORMAT} receipt`;
+    return result;
+  }
+  const { chain_start: start, chain_head: head, steps, secret } = receipt;
+  if (!HEX64.test(String(start ?? "")) || !HEX64.test(String(head ?? "")) || !Array.isArray(steps)) {
+    result.error = "Receipt is missing chain_start, chain_head or steps";
+    return result;
+  }
+  if (secret !== undefined && secret !== null) {
+    if (!HEX64.test(String(secret)) || chainStart(secret) !== start) {
+      result.error = "chain_start does not match the secret";
+      return result;
+    }
+  }
+  for (let i = 0; i < steps.length; i++) {
+    const s = steps[i];
+    if (!s || typeof s !== "object" || s.index !== i) { result.error = `Step ${i} is out of order or missing`; return result; }
+    if (!STEP_TYPES.includes(s.type) || !HEX64.test(String(s.fingerprint ?? ""))) { result.error = `Step ${i} has an unknown type or a bad fingerprint`; return result; }
+  }
+  result.steps = steps.length;
+  result.chain_head = head;
+  if (computeChainHead(start, steps) !== head) {
+    result.error = "Chain mismatch: the steps do not add up to chain_head (a step was changed, dropped or reordered)";
+    return result;
+  }
+  result.chain_ok = true;
+  if (!receipt.proof) {
+    result.error = "Chain is intact but the receipt carries no proof bundle (not anchored yet, or attachBundle() was never run)";
+    return result;
+  }
+  const bundle = verifyProof(head, receipt.proof);
+  result.proof = bundle;
+  if (!bundle.verified) {
+    result.error = "Bundle does not match the chain head: " + String(bundle.error ?? "");
+    return result;
+  }
+  result.anchored = true;
+  result.verified = true;
+  const n = steps.length;
+  result.message = `Receipt for run ${receipt.run_id ?? "?"}: ${n} step${n === 1 ? "" : "s"} chain to head ${head.slice(0, 16)}…, and ${bundle.message}`;
+  return result;
+}
+
+/** Check that one step was made from this exact content. Needs the run secret. */
+export function verifyStep(receipt, index, content, secret) {
+  secret = secret ?? receipt?.secret;
+  if (!secret) return { verified: false, error: "This receipt carries no secret; the owner must supply it to check step content" };
+  const steps = receipt?.steps ?? [];
+  index = Number(index);
+  if (!(index >= 0 && index < steps.length)) return { verified: false, error: `No step ${index} in this receipt` };
+  const step = steps[index];
+  const ok = stepFingerprint(secret, content) === String(step.fingerprint ?? "");
+  const out = { verified: ok, index, type: step.type, label: step.label };
+  if (ok) out.message = `Step ${index} (${step.type}) was made from this content.`;
+  else out.error = `Step ${index} (${step.type}) was not made from this content.`;
+  return out;
+}
+
+/** Plain-text listing of a receipt, for humans. */
+export function describeReceipt(receipt) {
+  const lines = [`Agent run receipt: ${receipt.run_id ?? "?"}`];
+  const agent = receipt.agent ?? {};
+  if (Object.keys(agent).length) lines.push("  Agent      : " + Object.entries(agent).map(([k, v]) => `${k}=${v}`).join(", "));
+  lines.push(`  Started    : ${receipt.started_at ?? ""}`);
+  lines.push(`  Finished   : ${receipt.finished_at ?? "(not finished)"}`);
+  lines.push(`  Secret     : ${receipt.secret ? "present (redact before sharing)" : "redacted"}`);
+  lines.push(`  Chain head : ${receipt.chain_head ?? ""}`);
+  const proof = receipt.proof ?? {};
+  if (proof.tx_id) lines.push(`  Anchored   : ${proof.blockchain ?? ""} ${proof.tx_id} at ${proof.anchored_at ?? ""}`);
+  else if (receipt.proof_id !== undefined && receipt.proof_id !== null) lines.push(`  Anchored   : pending (proof ${receipt.proof_id})`);
+  else lines.push("  Anchored   : no");
+  const steps = receipt.steps ?? [];
+  lines.push(`  Steps      : ${steps.length}`);
+  for (const s of steps) {
+    const label = s.label ? `  ${s.label}` : "";
+    lines.push(`    ${String(s.index).padStart(3)}  ${String(s.type ?? "").padEnd(11)} ${s.at ?? ""}  ${String(s.fingerprint ?? "").slice(0, 16)}…${label}`);
+  }
+  return lines.join("\n");
+}
+
+async function receiptCommand(sub, file, args) {
+  if (!file || !existsSync(file)) {
+    console.error(`Error: Receipt file not found: ${file ?? "(none given)"}`);
+    process.exit(1);
+  }
+  const receipt = JSON.parse(readFileSync(file, "utf8"));
+  if (sub === "show") {
+    console.log(describeReceipt(receipt));
+    return;
+  }
+  if (sub === "verify") {
+    const result = verifyReceipt(receipt);
+    console.log(result.verified ? `VERIFIED: ${result.message}` : `FAILED: ${result.error ?? "Unknown error"}`);
+    let stepOk = true;
+    if (args.step !== undefined || args.content) {
+      if (args.step === undefined || !args.content) { console.error("Error: --step and --content go together"); process.exit(2); }
+      if (!existsSync(args.content)) { console.error(`Error: Content file not found: ${args.content}`); process.exit(1); }
+      const step = verifyStep(receipt, args.step, readFileSync(args.content), args.secret);
+      console.log(step.verified ? `STEP OK: ${step.message}` : `STEP FAILED: ${step.error}`);
+      stepOk = step.verified;
+    }
+    process.exit(result.verified && stepOk ? 0 : 1);
+  }
+  if (sub === "anchor") {
+    const r = RunReceipt.fromObject(receipt);
+    if (r.proof) { console.log("This receipt is already anchored and carries its bundle."); return; }
+    const client = new ProofLedger({ apiKey: process.env.PROOFLEDGER_API_KEY, baseUrl: args.baseUrl ?? DEFAULT_BASE_URL });
+    try {
+      if (r.proofId === null) await r.anchor(client, { wait: args.wait ?? 120 });
+      else await r.attachBundle(client);
+    } finally {
+      r.save(file);
+    }
+    if (r.proof) {
+      console.log(`Anchored: proof ${r.proofId}, ${r.proof.blockchain} transaction ${r.proof.tx_id} at ${r.proof.anchored_at}.`);
+      console.log(`Bundle saved into ${file}. Check it offline:  verify-proof receipt verify ${file}`);
+    } else {
+      console.log(`Submitted: proof ${r.proofId}. The Polygon anchor usually lands within a minute; run this again to save the bundle.`);
+    }
+    if (r.certificateUrl) console.log(`Certificate: ${r.certificateUrl}`);
+    return;
+  }
+  console.error(`Error: Unknown receipt command: ${sub ?? "(none)"}. Use verify, show or anchor.`);
+  process.exit(1);
+}
 
 function parseArgs(argv) {
   const args = { _: [] };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--proof") args.proof = argv[++i];
     else if (argv[i] === "--algorithm") args.algorithm = argv[++i];
+    else if (argv[i] === "--step") args.step = Number(argv[++i]);
+    else if (argv[i] === "--content") args.content = argv[++i];
+    else if (argv[i] === "--secret") args.secret = argv[++i];
+    else if (argv[i] === "--wait") args.wait = Number(argv[++i]);
+    else if (argv[i] === "--base-url") args.baseUrl = argv[++i];
     else if (argv[i] === "--help" || argv[i] === "-h") args.help = true;
     else args._.push(argv[i]);
   }
@@ -455,6 +783,11 @@ async function main() {
     const digest = await hashFile(file, algorithm);
     console.log(`${algorithm.toUpperCase()}: ${digest}`);
     console.log(`File: ${file}`);
+    return;
+  }
+
+  if (command === "receipt") {
+    await receiptCommand(args._[1], args._[2], args);
     return;
   }
 

@@ -99,6 +99,33 @@ print(proof["id"], proof["certificate_url"])
 
 `submit_batch` anchors up to 100 hashes in one call, each with your own record id so a retry returns the same proof. `verify_webhook_signature` checks the `ProofLedger-Signature` header on webhook deliveries. The API itself is documented at [proofledger.io/api](https://proofledger.io/api.html).
 
+## Agent run receipts
+
+Prove what an AI agent did, without storing what it saw. A receipt is a hash chain over the steps of one run: each step keeps only a SHA-256 fingerprint of its content (salted with a per-run secret), its type, its time and an optional short label. The chain head is anchored on ProofLedger as one ordinary proof, and the bundle is saved into the receipt. Anyone holding the receipt can recompute the chain and check the head against the bundle offline; nobody can read the prompts, tool calls or outputs from it.
+
+```python
+from agent_receipt import RunReceipt
+
+r = RunReceipt("support-ticket-48213", agent={"name": "support-bot", "model": "claude-sonnet-5-5"})
+r.prompt(customer_message, label="customer message")
+r.tool_call(json.dumps(call), label="lookup_order")
+r.tool_result(result_text)
+r.output(reply, label="reply sent")
+r.anchor()                              # one API proof; waits for the Polygon anchor (key from PROOFLEDGER_API_KEY)
+r.save("ticket-48213.receipt.json")
+```
+
+```bash
+verify-proof receipt verify ticket-48213.receipt.json                       # offline: chain + bundle
+verify-proof receipt verify ticket-48213.receipt.json --step 0 --content customer-message.txt
+verify-proof receipt show ticket-48213.receipt.json                         # labels and fingerprints, never content
+verify-proof receipt anchor ticket-48213.receipt.json                       # anchor a saved, unanchored receipt
+```
+
+Remove the `secret` field before handing a receipt to a third party: the chain still verifies, and nothing in the file can be guessed; checking a step against its content then needs your secret (`--secret`). The format is `proofledger-agent-run-receipt/1`; [`examples/receipt.json`](examples/receipt.json) is a sample the Python and Node ports both verify, and [`examples/langchain_receipt_callback.py`](examples/langchain_receipt_callback.py) is a LangChain callback handler that builds a receipt from a run. The chain rule is in the module docstring of [`agent_receipt.py`](agent_receipt.py), so it can be recomputed in any language.
+
+A receipt shows that this exact sequence of steps existed by the anchor time and has not changed since, and, given a step's content and the secret, that the step was made from that content. It does not show that the agent was right, or who ran it.
+
 ## Proof file format
 
 A bundle is one JSON document. Abridged:
@@ -131,7 +158,7 @@ On Polygon each proof is its own transaction, so `merkle_path` is empty. Bitcoin
 
 ## Use it in Claude Code (plugin)
 
-This repository is also a Claude Code plugin marketplace. The `proofledger` plugin bundles the MCP server below (started with `uvx`, so it needs [uv](https://docs.astral.sh/uv/) and nothing else) and two skills, `/proofledger:anchor` and `/proofledger:verify`:
+This repository is also a Claude Code plugin marketplace. The `proofledger` plugin bundles the MCP server below (started with `uvx`, so it needs [uv](https://docs.astral.sh/uv/) and nothing else) and three skills, `/proofledger:anchor`, `/proofledger:verify` and `/proofledger:receipt`:
 
 ```
 /plugin marketplace add Fulcrum-Enterprises/verify-proof
@@ -164,6 +191,10 @@ The base install stays dependency-free; the `[mcp]` extra adds the MCP SDK and i
 | `create_proofs_batch` | Anchor up to 100 files in one API call; file names double as external ids, so re-running on unchanged files returns their existing proofs. If a file changed but kept its name, you get its old proof back, so rename it or anchor it with `create_proof`. Network, API key |
 | `get_proof_status` | Current anchoring status of one of your proofs. Network, API key |
 | `save_proof_bundle` | Download a proof's bundle (this package's proof format) and save it next to the file, so verification needs nothing from ProofLedger later. Network, API key |
+| `start_run_receipt` | Start an agent run receipt file (fresh secret, no steps). Offline |
+| `add_receipt_step` | Fingerprint one step (prompt, tool_call, tool_result, output, note) into the receipt; the content is only hashed. Offline |
+| `anchor_run_receipt` | Anchor the receipt's chain head as one proof and save the bundle into the receipt. Network, API key |
+| `verify_run_receipt` | Recompute the chain and check it against the bundle, optionally checking one step's content. Offline |
 
 ### Connect it to Claude Desktop
 

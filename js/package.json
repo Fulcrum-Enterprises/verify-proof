@@ -1,7 +1,7 @@
 {
   "name": "verify-proof",
-  "version": "0.3.2",
-  "description": "Verify blockchain-anchored timestamp proofs offline, and create them through the ProofLedger API (batch, webhooks, bundles). Zero dependencies. CLI + library.",
+  "version": "0.4.0",
+  "description": "Verify blockchain-anchored timestamp proofs offline, create them through the ProofLedger API (batch, webhooks, bundles), and keep agent run receipts. Zero dependencies. CLI + library.",
   "type": "module",
   "main": "verify-proof.js",
   "exports": "./verify-proof.js",
@@ -28,7 +28,9 @@
     "polygon",
     "proofledger",
     "timestamping",
-    "api"
+    "api",
+    "ai-agents",
+    "audit-trail"
   ],
   "author": "Craig Solomon <craig@fulcrumenterprises.tech>",
   "license": "MIT",
