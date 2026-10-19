@@ -1,8 +1,8 @@
 {
   "name": "proofledger",
   "displayName": "ProofLedger",
-  "version": "0.1.3",
-  "description": "Anchor a file's SHA-256 hash on Polygon through the ProofLedger API, save its proof bundle, and verify files against bundles offline. Only the hash leaves your machine, plus the file name unless you ask Claude not to send it.",
+  "version": "0.2.0",
+  "description": "Anchor a file's SHA-256 hash on Polygon through the ProofLedger API, save its proof bundle, verify files against bundles offline, and keep agent run receipts: a tamper-evident record of what an agent did that stores only fingerprints. Only hashes leave your machine, plus the file name unless you ask Claude not to send it.",
   "author": {
     "name": "ProofLedger",
     "url": "https://proofledger.io"
@@ -17,7 +17,9 @@
     "polygon",
     "sha256",
     "verify",
-    "mcp"
+    "mcp",
+    "ai-agents",
+    "audit-trail"
   ],
   "documentationUrl": "https://github.com/Fulcrum-Enterprises/verify-proof/tree/main/claude-plugin",
   "supportUrl": "https://proofledger.io/support.html",

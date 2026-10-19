@@ -4,7 +4,7 @@
       "command": "uvx",
       "args": [
         "--from",
-        "verify-proof[mcp]==0.3.4",
+        "verify-proof[mcp]==0.4.0",
         "verify-proof-mcp"
       ]
     }

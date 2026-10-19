@@ -1,6 +1,6 @@
 # ProofLedger plugin for Claude Code
 
-Lets Claude anchor a file's SHA-256 hash on Polygon through the [ProofLedger](https://proofledger.io) API, save the proof bundle next to the file, and verify files against bundles offline. It bundles the `verify-proof` MCP server and two skills, `/proofledger:anchor` and `/proofledger:verify`.
+Lets Claude anchor a file's SHA-256 hash on Polygon through the [ProofLedger](https://proofledger.io) API, save the proof bundle next to the file, verify files against bundles offline, and keep agent run receipts (a tamper-evident record of what an agent did that stores only fingerprints of each step). It bundles the `verify-proof` MCP server and three skills, `/proofledger:anchor`, `/proofledger:verify` and `/proofledger:receipt`.
 
 ## Install
 
