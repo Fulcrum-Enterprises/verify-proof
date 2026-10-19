@@ -1,0 +1,18 @@
+{
+  "name": "proofledger",
+  "owner": {
+    "name": "ProofLedger",
+    "url": "https://proofledger.io"
+  },
+  "metadata": {
+    "description": "ProofLedger plugin for Cursor: anchor files on Polygon, verify proofs offline, keep agent run receipts.",
+    "version": "0.2.0"
+  },
+  "plugins": [
+    {
+      "name": "proofledger",
+      "source": "claude-plugin",
+      "description": "Anchor a file's SHA-256 on Polygon through the ProofLedger API, save its proof bundle, verify files against bundles offline, and keep agent run receipts."
+    }
+  ]
+}

@@ -18,6 +18,12 @@ claude plugin marketplace add Fulcrum-Enterprises/verify-proof
 claude plugin install proofledger@proofledger
 ```
 
+## Cursor
+
+The same folder is a Cursor plugin too (`.cursor-plugin/plugin.json`, `mcp.json`, the same three skills), and the repository root carries `.cursor-plugin/marketplace.json`, so it can be imported as a Cursor marketplace. For a single Cursor install, the MCP server alone goes in with one click (uv required):
+
+[![Add verify-proof to Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=verify-proof&config=eyJjb21tYW5kIjoidXZ4IiwiYXJncyI6WyItLWZyb20iLCJ2ZXJpZnktcHJvb2ZbbWNwXSIsInZlcmlmeS1wcm9vZi1tY3AiXX0=)
+
 ## Requirements
 
 - [uv](https://docs.astral.sh/uv/), which starts the MCP server with `uvx`, so there is nothing to pip install.

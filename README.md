@@ -165,7 +165,7 @@ This repository is also a Claude Code plugin marketplace. The `proofledger` plug
 /plugin install proofledger@proofledger
 ```
 
-Then ask: *"Anchor `dist/app-1.4.0.zip` and save its proof next to it."* Creating proofs reads `PROOFLEDGER_API_KEY` from the shell that starts Claude Code; verifying needs no key. Details in [`claude-plugin/`](claude-plugin/).
+Then ask: *"Anchor `dist/app-1.4.0.zip` and save its proof next to it."* Creating proofs reads `PROOFLEDGER_API_KEY` from the shell that starts Claude Code; verifying needs no key. Details in [`claude-plugin/`](claude-plugin/). Cursor users: see [Connect it to Cursor](#connect-it-to-cursor) below.
 
 ## Use as an MCP server (AI assistants)
 
@@ -211,6 +211,27 @@ Add this to your `claude_desktop_config.json` (see [`examples/claude_desktop_con
 ```
 
 Restart Claude Desktop. If `verify-proof-mcp` isn't found on your PATH, use the Python module form instead: `"command": "python"`, `"args": ["-m", "verify_proof_mcp"]`.
+
+### Connect it to Cursor
+
+One click, with [uv](https://docs.astral.sh/uv/) installed (Cursor starts the server with `uvx`, nothing to pip install):
+
+[![Add verify-proof to Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=verify-proof&config=eyJjb21tYW5kIjoidXZ4IiwiYXJncyI6WyItLWZyb20iLCJ2ZXJpZnktcHJvb2ZbbWNwXSIsInZlcmlmeS1wcm9vZi1tY3AiXX0=)
+
+Or add it by hand to `~/.cursor/mcp.json` (or a project's `.cursor/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "verify-proof": {
+      "command": "uvx",
+      "args": ["--from", "verify-proof[mcp]", "verify-proof-mcp"]
+    }
+  }
+}
+```
+
+Creating proofs reads `PROOFLEDGER_API_KEY` from the environment Cursor runs in; verifying needs no key. The [`claude-plugin/`](claude-plugin/) folder also carries a Cursor plugin manifest (`.cursor-plugin/plugin.json`, `mcp.json`, the same three skills), so the repository can be imported as a Cursor marketplace.
 
 Then ask the assistant things like:
 

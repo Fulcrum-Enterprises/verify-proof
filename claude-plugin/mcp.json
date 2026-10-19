@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "verify-proof": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "verify-proof[mcp]==0.4.0",
+        "verify-proof-mcp"
+      ]
+    }
+  }
+}
