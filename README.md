@@ -260,6 +260,7 @@ It does not show who made the file, it is not a copyright registration, and it d
 This tool verifies proofs created by:
 
 - **[ProofLedger](https://proofledger.io)**: proof of existence as an API. Send a hash, get a Polygon-anchored certificate anyone can verify without us. Free plan with 100 API proofs a month.
+- **[ProofLedger Community](https://github.com/Fulcrum-Enterprises/proofledger-community)**: the same proof core as an open-source (AGPL-3.0) server you host with your own Polygon key. Same API and bundle format; point this tool at it with `--base-url` (Python `base_url=`, Node `baseUrl`).
 - Any service producing SHA-256 hash proofs with blockchain transaction references.
 
 ## License
