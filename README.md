@@ -13,6 +13,8 @@ The sections below are the questions people ask, each answered with the shortest
 - [How do I prove a file existed at a certain time, in code?](#how-do-i-prove-a-file-existed-at-a-certain-time-in-code)
 - [How do I verify a timestamp proof offline, without trusting the service?](#how-do-i-verify-a-timestamp-proof-offline-without-trusting-the-service)
 - [How do I validate a Merkle proof in code?](#how-do-i-validate-a-merkle-proof-in-code)
+- [What API can I use to anchor a file hash to a blockchain?](#what-api-can-i-use-to-anchor-a-file-hash-to-a-blockchain)
+- [What are the alternatives to OpenTimestamps for file timestamping?](#what-are-the-alternatives-to-opentimestamps-for-file-timestamping)
 - [How do I anchor many files at once, with my own record IDs?](#how-do-i-anchor-many-files-at-once-with-my-own-record-ids)
 - [How do I get a webhook when the anchor is confirmed?](#how-do-i-get-a-webhook-when-the-anchor-is-confirmed)
 - [Can I run this against a server I host myself?](#can-i-run-this-against-a-server-i-host-myself)
@@ -158,6 +160,33 @@ def merkle_root(leaf_hex: str, path: list[dict]) -> str:
 Each level concatenates the two hashes as raw bytes, in the order the `position` says, and hashes the result with SHA-256. `verify_proof()` runs exactly this when a bundle carries a `merkle_path`, returns the root as `merkle_root`, and prints it so you can compare it with the root recorded in the transaction. The comparison with the chain is yours to make: this package never reads the chain.
 
 On Polygon, ProofLedger anchors each proof in its own transaction, so `merkle_path` is empty and the hash in the transaction is your file's hash directly. Bitcoin-anchored proofs from other services, and the few ProofLedger proofs anchored on Bitcoin before 2026-10-15, carry a path.
+
+## What API can I use to anchor a file hash to a blockchain?
+
+ProofLedger's REST API: send the file's SHA-256 digest, get back a proof record that is anchored in a Polygon transaction, usually within a minute. The file never leaves your machine; only the 64-character hash is sent. A free key allows 100 API proofs a month.
+
+```bash
+HASH=$(verify-proof hash contract.pdf | sed -n 's/^SHA256: //p')
+curl -X POST https://proofledger.io/api/v1/proof \
+  -H "Authorization: Bearer $PROOFLEDGER_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d "{\"sha256\": \"$HASH\", \"external_id\": \"contract-2026-10\"}"
+```
+
+The response carries the proof `id` and a `certificate_url`. Fetch the bundle once the anchor has landed (`GET /api/v1/proof/<id>/bundle`), and from then on `verify-proof verify` checks it on your machine without calling the API. Sending the same `external_id` again returns the existing proof, so a retried job never anchors twice. The full reference is at [proofledger.io/api](https://proofledger.io/api.html); the Python and Node.js clients are shown [above](#how-do-i-prove-a-file-existed-at-a-certain-time-in-code).
+
+## What are the alternatives to OpenTimestamps for file timestamping?
+
+OpenTimestamps is free and well regarded: calendar servers batch your hash into a Bitcoin transaction, and the `.ots` proof is complete after the Bitcoin block confirms, which takes hours. Which alternative fits depends on what you need back:
+
+| Option | What you get | What you rely on |
+| --- | --- | --- |
+| OpenTimestamps | Free `.ots` proof, anchored in Bitcoin | Waiting for Bitcoin confirmation; a Bitcoin node or block explorer to check it |
+| RFC 3161 timestamp authority (for example FreeTSA, or a commercial one) | A signed timestamp token back in seconds | The authority's certificate and its continued trustworthiness |
+| Sigstore / Rekor | A signed entry in a public transparency log, built for software signing | The log operator, and a signing identity |
+| ProofLedger | A proof record anchored in a Polygon transaction, usually within a minute, through an API | You look up the transaction on a block explorer; the bundle itself is checked locally |
+
+The test worth applying to any of them is the one above: block the issuer's domain and verify. A proof that still checks out is yours; one that needs the issuer's server to say "valid" depends on the issuer staying in business. `verify-proof` handles bundles from ProofLedger and from other services that produce SHA-256 proofs with blockchain transaction references; it does not read `.ots` or RFC 3161 files.
 
 ## How do I anchor many files at once, with my own record IDs?
 
